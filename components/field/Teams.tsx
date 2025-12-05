@@ -11,6 +11,14 @@ import {
 } from "@tanstack/react-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronDown, Loader2, Settings, Search, Plus, X, Eye, EyeOff, Link2 } from "lucide-react";
+import { DataTable } from "../PatientsTable";
+import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
+import {
+    useTeamMembers,
+    useCreateTeamMember,
+    CreateUserPayload,
+} from "../team/hooks/useTeamMembers";
+import { toast } from "sonner";
 import {
     Pagination,
     PaginationContent,
@@ -119,11 +127,28 @@ const columns: ColumnDef<Team>[] = [
 
 export function Teams() {
     const [searchQuery, setSearchQuery] = React.useState("");
-    const [isLoading] = React.useState(false);
     const [pageIndex, setPageIndex] = React.useState(0);
     const pageSize = 10;
 
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+    const [currentUser, setCurrentUser] = React.useState<any>(null);
+
+    // Load current user from localStorage
+    React.useEffect(() => {
+        try {
+            const userData = localStorage.getItem("userData");
+            if (userData) {
+                const parsed = JSON.parse(userData);
+                setCurrentUser(parsed);
+            }
+        } catch {
+            toast.error("Failed to load user data");
+        }
+    }, []);
+
+    // Fetch team members using the hook
+    const { data: teamMembers, isLoading: loadingMembers } = useTeamMembers();
+    const createMemberMutation = useCreateTeamMember();
 
     // Sheet states
     const [isSheetOpen, setIsSheetOpen] = React.useState(false);
@@ -146,25 +171,26 @@ export function Teams() {
         { id: 2, fullName: "Akendum Zac", email: "ake_zac@gmail.com", tel: "+237 854 114 222", lastActivity: "Yesterday" },
     ]);
 
-    // Add Member form states
+    // Add Member form states - Updated to match API payload
     const [newMember, setNewMember] = React.useState({
-        firstName: "",
-        lastName: "",
-        tel1: "",
-        tel2: "",
+        username: "",
+        first_name: "",
+        last_name: "",
+        gender: "male" as "male" | "female",
         email: "",
-        role: "",
+        phone: "",
+        phone2: "",
         password: "",
         repeatPassword: "",
     });
     const [showPassword, setShowPassword] = React.useState(false);
     const [showRepeatPassword, setShowRepeatPassword] = React.useState(false);
     const [memberErrors, setMemberErrors] = React.useState({
-        firstName: false,
-        lastName: false,
-        tel1: false,
+        username: false,
+        first_name: false,
+        last_name: false,
         email: false,
-        role: false,
+        phone: false,
         password: false,
         repeatPassword: false,
     });
@@ -177,44 +203,72 @@ export function Teams() {
     const handleAddMember = () => {
         // Validate required fields
         const newMemberErrors = {
-            firstName: !newMember.firstName,
-            lastName: !newMember.lastName,
-            tel1: !newMember.tel1,
+            username: !newMember.username,
+            first_name: !newMember.first_name,
+            last_name: !newMember.last_name,
+            phone: !newMember.phone,
             email: !newMember.email,
-            role: !newMember.role,
-            password: !newMember.password,
+            password: !newMember.password || newMember.password.length < 6,
             repeatPassword: !newMember.repeatPassword || newMember.password !== newMember.repeatPassword,
         };
 
         setMemberErrors(newMemberErrors);
 
         if (Object.values(newMemberErrors).some(error => error)) {
+            toast.error("Please fix the errors in the form");
             return;
         }
 
-        // Add member to list
-        const member: Member = {
-            id: members.length + 1,
-            fullName: `${newMember.firstName} ${newMember.lastName}`,
-            email: newMember.email,
-            tel: newMember.tel1,
-            lastActivity: "Just now",
+        if (!currentUser?.facility?.id) {
+            toast.error("User facility information not found");
+            return;
+        }
+
+        // Build API payload
+        const payload: CreateUserPayload = {
+            username: newMember.username,
+            password: newMember.password,
+            first_name: newMember.first_name,
+            last_name: newMember.last_name,
+            gender: newMember.gender,
+            email: [newMember.email],
+            phone: newMember.phone2 ? [newMember.phone, newMember.phone2] : [newMember.phone],
+            role_id: currentUser?.role.id,
+            facility_type: currentUser?.facility.facility_type,
+            facility_id: currentUser?.facility.id,
         };
 
-        setMembers([...members, member]);
+        createMemberMutation.mutate(payload, {
+            onSuccess: () => {
+                toast.success("Team member created successfully!");
 
-        // Reset form
-        setNewMember({
-            firstName: "",
-            lastName: "",
-            tel1: "",
-            tel2: "",
-            email: "",
-            role: "",
-            password: "",
-            repeatPassword: "",
+                // Reset form
+                setNewMember({
+                    username: "",
+                    first_name: "",
+                    last_name: "",
+                    gender: "male",
+                    email: "",
+                    phone: "",
+                    phone2: "",
+                    password: "",
+                    repeatPassword: "",
+                });
+                setMemberErrors({
+                    username: false,
+                    first_name: false,
+                    last_name: false,
+                    email: false,
+                    phone: false,
+                    password: false,
+                    repeatPassword: false,
+                });
+                setIsAddMemberSheetOpen(false);
+            },
+            onError: (err: any) => {
+                toast.error(err.message || "Failed to create team member");
+            },
         });
-        setIsAddMemberSheetOpen(false);
     };
 
     const handleSave = () => {
@@ -261,6 +315,29 @@ export function Teams() {
                 team.activeCampaign.toLowerCase().includes(query)
         );
     }, [searchQuery]);
+
+    // Map team members data for DataTable
+    const tableMembersData = React.useMemo(() => {
+        return teamMembers?.map((u: any) => ({
+            username: u.username,
+            firstName: u.first_name,
+            lastName: u.last_name,
+            email: u.email?.[0],
+            phone: u.phone?.[0],
+            gender: u.gender,
+            code: u.code
+        })) ?? [];
+    }, [teamMembers]);
+
+    const memberColumns = [
+        { accessorKey: "username", header: "Username" },
+        { accessorKey: "firstName", header: "First Name" },
+        { accessorKey: "lastName", header: "Last Name" },
+        { accessorKey: "email", header: "Email" },
+        { accessorKey: "phone", header: "Phone" },
+        { accessorKey: "gender", header: "Gender" },
+        { accessorKey: "code", header: "Code" },
+    ];
 
     const table = useReactTable({
         data: filteredData,
@@ -314,7 +391,7 @@ export function Teams() {
                 {/* Table */}
                 <Card className="w-full bg-white shadow-sm rounded-lg border border-gray-100 flex-1">
                     <CardContent className="overflow-x-auto p-0">
-                        {isLoading ? (
+                        {loadingMembers ? (
                             <div className="flex justify-center items-center py-20">
                                 <Loader2 className="animate-spin text-green-600" size={32} />
                             </div>
@@ -514,9 +591,9 @@ export function Teams() {
                     </div>
 
                     {/* Content */}
-                    <div className="p-6 h-[calc(100vh-200px)] max-w-[800px] mx-auto overflow-y-auto">
+                    <div className="p-6 h-[calc(100vh-200px)] w-full mx-auto overflow-y-auto">
                         {activeTab === "details" && (
-                            <div className="space-y-6 animate-in fade-in duration-300 slide-in-from-right-5">
+                            <div className="space-y-6 animate-in max-w-[800px] mx-auto fade-in duration-300 slide-in-from-right-5">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Team Name
@@ -599,36 +676,8 @@ export function Teams() {
                                     </Button>
                                 </div>
 
-                                {/* Members Table */}
-                                <div className="border border-gray-200 rounded-sm overflow-hidden">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-gray-50">
-                                            <tr>
-                                                <th className="text-left px-4 py-3 text-gray-600 font-medium">Full Name</th>
-                                                <th className="text-left px-4 py-3 text-gray-600 font-medium">Email/username</th>
-                                                <th className="text-left px-4 py-3 text-gray-600 font-medium">Tel</th>
-                                                <th className="text-left px-4 py-3 text-gray-600 font-medium">Last Activity</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {members.map((member) => (
-                                                <tr key={member.id} className="border-t border-gray-100">
-                                                    <td className="px-4 py-3 text-gray-700">
-                                                        <div className="flex items-center gap-2">
-                                                            {member.fullName}
-                                                            {member.isActive && (
-                                                                <span className="bg-green-600 text-white text-xs px-2 py-0.5 rounded">online</span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-gray-700">{member.email}</td>
-                                                    <td className="px-4 py-3 text-gray-700">{member.tel}</td>
-                                                    <td className="px-4 py-3 text-gray-700">{member.lastActivity}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                {/* Members Table - Using DataTable */}
+                                <DataTable data={tableMembersData} columns={memberColumns} isLoading={loadingMembers} />
                             </div>
                         )}
                     </div>
@@ -657,18 +706,38 @@ export function Teams() {
                     <div className="p-6 h-[calc(100vh-120px)] overflow-y-auto space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                First Name
+                                Username <span className="text-red-500">*</span>
                             </label>
                             <Input
-                                value={newMember.firstName}
+                                value={newMember.username}
                                 onChange={(e) => {
-                                    setNewMember(prev => ({ ...prev, firstName: e.target.value }));
-                                    setMemberErrors(prev => ({ ...prev, firstName: false }));
+                                    setNewMember(prev => ({ ...prev, username: e.target.value }));
+                                    setMemberErrors(prev => ({ ...prev, username: false }));
+                                }}
+                                placeholder="amos.paul"
+                                className={cn(
+                                    "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus-visible:ring-0",
+                                    memberErrors.username
+                                        ? "border-b-red-500 focus:border-b-red-500"
+                                        : "border-b-gray-300 focus:border-b-[#04b301]"
+                                )}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                First Name <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                                value={newMember.first_name}
+                                onChange={(e) => {
+                                    setNewMember(prev => ({ ...prev, first_name: e.target.value }));
+                                    setMemberErrors(prev => ({ ...prev, first_name: false }));
                                 }}
                                 placeholder="Amos"
                                 className={cn(
                                     "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus-visible:ring-0",
-                                    memberErrors.firstName
+                                    memberErrors.first_name
                                         ? "border-b-red-500 focus:border-b-red-500"
                                         : "border-b-gray-300 focus:border-b-[#04b301]"
                                 )}
@@ -677,18 +746,18 @@ export function Teams() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Last Name
+                                Last Name <span className="text-red-500">*</span>
                             </label>
                             <Input
-                                value={newMember.lastName}
+                                value={newMember.last_name}
                                 onChange={(e) => {
-                                    setNewMember(prev => ({ ...prev, lastName: e.target.value }));
-                                    setMemberErrors(prev => ({ ...prev, lastName: false }));
+                                    setNewMember(prev => ({ ...prev, last_name: e.target.value }));
+                                    setMemberErrors(prev => ({ ...prev, last_name: false }));
                                 }}
-                                placeholder="James"
+                                placeholder="Paul"
                                 className={cn(
                                     "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus-visible:ring-0",
-                                    memberErrors.lastName
+                                    memberErrors.last_name
                                         ? "border-b-red-500 focus:border-b-red-500"
                                         : "border-b-gray-300 focus:border-b-[#04b301]"
                                 )}
@@ -697,39 +766,25 @@ export function Teams() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Tel 1
+                                Gender
                             </label>
-                            <Input
-                                value={newMember.tel1}
-                                onChange={(e) => {
-                                    setNewMember(prev => ({ ...prev, tel1: e.target.value }));
-                                    setMemberErrors(prev => ({ ...prev, tel1: false }));
-                                }}
-                                placeholder="+237"
-                                className={cn(
-                                    "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus-visible:ring-0",
-                                    memberErrors.tel1
-                                        ? "border-b-red-500 focus:border-b-red-500"
-                                        : "border-b-gray-300 focus:border-b-[#04b301]"
-                                )}
-                            />
+                            <Select
+                                value={newMember.gender}
+                                onValueChange={(value) => setNewMember(prev => ({ ...prev, gender: value as "male" | "female" }))}
+                            >
+                                <SelectTrigger className="rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0 border-b-gray-300 focus:border-b-[#04b301]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="male">Male</SelectItem>
+                                    <SelectItem value="female">Female</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Tel 2 (optional)
-                            </label>
-                            <Input
-                                value={newMember.tel2}
-                                onChange={(e) => setNewMember(prev => ({ ...prev, tel2: e.target.value }))}
-                                placeholder="+237"
-                                className="rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 border-b-gray-300 focus:border-b-[#04b301] focus-visible:ring-0"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Email
+                                Email <span className="text-red-500">*</span>
                             </label>
                             <Input
                                 type="email"
@@ -750,31 +805,34 @@ export function Teams() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Role
+                                Phone <span className="text-red-500">*</span>
                             </label>
-                            <Select
-                                value={newMember.role}
-                                onValueChange={(value) => {
-                                    setNewMember(prev => ({ ...prev, role: value }));
-                                    setMemberErrors(prev => ({ ...prev, role: false }));
+                            <Input
+                                value={newMember.phone}
+                                onChange={(e) => {
+                                    setNewMember(prev => ({ ...prev, phone: e.target.value }));
+                                    setMemberErrors(prev => ({ ...prev, phone: false }));
                                 }}
-                            >
-                                <SelectTrigger
-                                    className={cn(
-                                        "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0",
-                                        memberErrors.role
-                                            ? "border-b-red-500"
-                                            : "border-b-gray-300 focus:border-b-[#04b301]"
-                                    )}
-                                >
-                                    <SelectValue placeholder="Team Lead" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="team_lead">Team Lead</SelectItem>
-                                    <SelectItem value="member">Member</SelectItem>
-                                    <SelectItem value="supervisor">Supervisor</SelectItem>
-                                </SelectContent>
-                            </Select>
+                                placeholder="+237 6XX XXX XXX"
+                                className={cn(
+                                    "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus-visible:ring-0",
+                                    memberErrors.phone
+                                        ? "border-b-red-500 focus:border-b-red-500"
+                                        : "border-b-gray-300 focus:border-b-[#04b301]"
+                                )}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Phone 2 (optional)
+                            </label>
+                            <Input
+                                value={newMember.phone2}
+                                onChange={(e) => setNewMember(prev => ({ ...prev, phone2: e.target.value }))}
+                                placeholder="+237"
+                                className="rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 border-b-gray-300 focus:border-b-[#04b301] focus-visible:ring-0"
+                            />
                         </div>
 
                         <div className="pt-4 border-t">
@@ -783,7 +841,7 @@ export function Teams() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Password
+                                Password <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
                                 <Input
@@ -806,14 +864,14 @@ export function Teams() {
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                                 >
-                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    {showPassword ? <EyeSlashIcon size={20} /> : <EyeIcon size={20} />}
                                 </button>
                             </div>
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Repeat Password
+                                Repeat Password <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
                                 <Input
@@ -836,7 +894,7 @@ export function Teams() {
                                     onClick={() => setShowRepeatPassword(!showRepeatPassword)}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                                 >
-                                    {showRepeatPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    {showRepeatPassword ? <EyeSlashIcon size={20} /> : <EyeIcon size={20} />}
                                 </button>
                             </div>
                         </div>
