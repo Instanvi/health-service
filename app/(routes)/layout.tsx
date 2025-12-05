@@ -83,7 +83,7 @@ const MainLayout = ({
   if (!data || !userFacility) return null;
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen bg-gray-100">
       <AppHeader
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -92,7 +92,7 @@ const MainLayout = ({
         userName={`${data?.first_name} ${data?.last_name}`}
         role={data?.role.name}
       />
-      <main className="flex-1 overflow-auto">
+      <main className="min-h-screen pl-20">
         <ActiveComponent setActiveTab={setActiveTab} />
       </main>
     </div>
@@ -100,4 +100,3 @@ const MainLayout = ({
 };
 
 export default MainLayout;
-4

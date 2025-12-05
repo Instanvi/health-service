@@ -1,19 +1,14 @@
 "use client";
 
 import React from "react";
-import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap } from "@react-google-maps/api";
+import { useGoogleMaps } from "@/lib/GoogleMapsProvider";
 
 const mapContainerStyle = { width: "100%", height: "100%" };
 const center = { lat: 4.0511, lng: 9.7679 }; // Default to Douala/Wouri area
-const libraries: ("visualization")[] = ["visualization"];
 
 export default function FieldMap() {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
-
-    const { isLoaded } = useJsApiLoader({
-        googleMapsApiKey: apiKey,
-        libraries,
-    });
+    const { isLoaded } = useGoogleMaps();
 
     if (!isLoaded) {
         return (

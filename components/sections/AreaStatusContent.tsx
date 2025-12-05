@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useMemo, useState, useCallback, memo, useRef } from "react";
-import { GoogleMap, useJsApiLoader, HeatmapLayer } from "@react-google-maps/api";
+import { GoogleMap, HeatmapLayer } from "@react-google-maps/api";
+import { useGoogleMaps } from "@/lib/GoogleMapsProvider";
 import { TrendingUp } from "lucide-react";
 import { Card } from "../ui/card";
 import { useGetFacilities } from "@/components/facility/hooks/useFacility";
@@ -28,7 +29,6 @@ import { MultiSelect } from "@/components/ui/multi-select";
 
 const mapContainerStyle = { width: "100%", height: "100%" };
 const center = { lat: 4.0511, lng: 9.7679 }; // Default to Douala/Wouri area
-const libraries: ("visualization")[] = ["visualization"];
 
 // ID from user request, assumed to be Wouri District or similar parent
 const PARENT_FACILITY_ID = "69207e34d5291f6e10b4a5d9";
@@ -160,7 +160,6 @@ const TimeUnitItem = memo(({
 TimeUnitItem.displayName = "TimeUnitItem";
 
 export default function AreaStatusContent() {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
     const [selectedFacilityId, setSelectedFacilityId] = useState<string>("");
 
     // --- Date State & Logic ---
@@ -169,10 +168,7 @@ export default function AreaStatusContent() {
     const [activeView, setActiveView] = useState<ViewType>("DAY");
     const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
 
-    const { isLoaded } = useJsApiLoader({
-        googleMapsApiKey: apiKey,
-        libraries,
-    });
+    const { isLoaded } = useGoogleMaps();
 
     // Computed Values for Date Logic
     const selectedUnitId = useMemo(

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
+import { GoogleMap, Marker } from "@react-google-maps/api";
+import { useGoogleMaps } from "@/lib/GoogleMapsProvider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,10 +57,7 @@ export default function Facility() {
   const [isFacilitySheetOpen, setIsFacilitySheetOpen] = useState(false);
 
   // Google Maps Loader
-  const { isLoaded } = useJsApiLoader({
-    id: "google-map-script",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-  });
+  const { isLoaded } = useGoogleMaps();
 
   const mapRef = useRef<google.maps.Map | null>(null);
 
@@ -195,7 +193,7 @@ export default function Facility() {
             longitude: lng,
           },
         }));
-        
+
         toast.success("Location updated from map");
       } else {
         toast.error("Could not fetch address details for this location");
@@ -282,9 +280,9 @@ export default function Facility() {
     // Handle nested location address for display if API returns updated structure, 
     // otherwise fallback to old root address
     {
-        accessorKey: "address", 
-        header: "Address",
-        cell: ({ row }: any) => row.original.location?.address || row.original.address 
+      accessorKey: "address",
+      header: "Address",
+      cell: ({ row }: any) => row.original.location?.address || row.original.address
     },
     { accessorKey: "phone", header: "Phone" },
     { accessorKey: "email", header: "Email" },
@@ -298,8 +296,8 @@ export default function Facility() {
 
   const formParentName = formSelectedParentId
     ? data?.results?.find(
-        (f: any) => f._id === formSelectedParentId || f.id === formSelectedParentId
-      )?.name
+      (f: any) => f._id === formSelectedParentId || f.id === formSelectedParentId
+    )?.name
     : null;
 
   return (
@@ -335,11 +333,10 @@ export default function Facility() {
                           }}
                         >
                           <Check
-                            className={`mr-2 h-4 w-4 ${
-                              selectedParentId === (facility._id || facility.id)
+                            className={`mr-2 h-4 w-4 ${selectedParentId === (facility._id || facility.id)
                                 ? "opacity-100"
                                 : "opacity-0"
-                            }`}
+                              }`}
                           />
                           {facility.name}
                         </CommandItem>
@@ -400,24 +397,24 @@ export default function Facility() {
           {/* SCROLLABLE CONTENT AREA WITH SPLIT LAYOUT */}
           <div className="flex-1 overflow-y-auto bg-gray-50/50">
             <div className="flex flex-col lg:flex-row h-full">
-              
+
               {/* LEFT SIDE: GOOGLE MAP */}
               <div className="w-full lg:w-1/2 h-[400px] lg:h-auto relative border-b lg:border-b-0 lg:border-r border-gray-200 bg-white">
                 {isLoaded ? (
                   <GoogleMap
                     mapContainerStyle={containerStyle}
                     center={{
-                        lat: form.location.latitude || defaultCenter.lat,
-                        lng: form.location.longitude || defaultCenter.lng,
+                      lat: form.location.latitude || defaultCenter.lat,
+                      lng: form.location.longitude || defaultCenter.lng,
                     }}
                     zoom={13}
                     onLoad={onLoad}
                     onUnmount={onUnmount}
                     onClick={handleMapClick}
                     options={{
-                        streetViewControl: false,
-                        mapTypeControl: false,
-                        fullscreenControl: false,
+                      streetViewControl: false,
+                      mapTypeControl: false,
+                      fullscreenControl: false,
                     }}
                   >
                     <Marker
@@ -435,15 +432,15 @@ export default function Facility() {
                   </div>
                 )}
                 <div className="absolute top-4 left-4 right-4 bg-white/90 p-3 rounded shadow backdrop-blur-sm text-xs text-gray-700">
-                    <MapPin className="w-4 h-4 inline-block mr-1 text-[#028700]"/>
-                    Click on the map or drag the marker to pinpoint the facility location.
+                  <MapPin className="w-4 h-4 inline-block mr-1 text-[#028700]" />
+                  Click on the map or drag the marker to pinpoint the facility location.
                 </div>
               </div>
 
               {/* RIGHT SIDE: FORM INPUTS */}
               <div className="w-full lg:w-1/2 p-6 space-y-6 bg-white">
                 <h2 className="font-semibold text-lg border-b pb-2">Facility Details</h2>
-                
+
                 {/* NAME */}
                 <div className="space-y-1">
                   <Label>Facility Name <span className="text-red-500">*</span></Label>
@@ -458,74 +455,74 @@ export default function Facility() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* TYPE */}
-                    <div className="space-y-1">
+                  {/* TYPE */}
+                  <div className="space-y-1">
                     <Label>Facility Type <span className="text-red-500">*</span></Label>
                     <Select
-                        value={form.facility_type}
-                        onValueChange={(v) => setForm({ ...form, facility_type: v as any })}
+                      value={form.facility_type}
+                      onValueChange={(v) => setForm({ ...form, facility_type: v as any })}
                     >
-                        <SelectTrigger className="rounded-sm bg-[#F2F7FB] border-[#D9D9D9] py-6">
+                      <SelectTrigger className="rounded-sm bg-[#F2F7FB] border-[#D9D9D9] py-6">
                         <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
+                      </SelectTrigger>
+                      <SelectContent>
                         <SelectItem value="health_center">Health Center</SelectItem>
                         <SelectItem value="health_area">Health Area</SelectItem>
                         <SelectItem value="district">District Hospital</SelectItem>
-                        </SelectContent>
+                      </SelectContent>
                     </Select>
-                    </div>
+                  </div>
 
-                    {/* PARENT */}
-                    <div className="space-y-1">
+                  {/* PARENT */}
+                  <div className="space-y-1">
                     <Label>Parent Facility</Label>
                     <Popover open={formParentPopoverOpen} onOpenChange={setFormParentPopoverOpen}>
-                        <PopoverTrigger asChild>
+                      <PopoverTrigger asChild>
                         <Button
-                            variant="outline"
-                            role="combobox"
-                            className="w-full justify-between rounded-sm bg-[#F2F7FB] border-[#D9D9D9] py-6 px-4 text-left font-normal hover:bg-[#F2F7FB]"
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between rounded-sm bg-[#F2F7FB] border-[#D9D9D9] py-6 px-4 text-left font-normal hover:bg-[#F2F7FB]"
                         >
-                            <span className="truncate">{formParentName || topParentName}</span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          <span className="truncate">{formParentName || topParentName}</span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[300px] p-0">
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0">
                         <Command>
-                            <CommandInput placeholder="Search facility..." />
-                            <CommandList>
+                          <CommandInput placeholder="Search facility..." />
+                          <CommandList>
                             <CommandEmpty>No facility found.</CommandEmpty>
                             <CommandGroup>
-                                <CommandItem
+                              <CommandItem
                                 onSelect={() => {
-                                    setFormSelectedParentId(null);
-                                    setFormParentPopoverOpen(false);
+                                  setFormSelectedParentId(null);
+                                  setFormParentPopoverOpen(false);
                                 }}
-                                >
+                              >
                                 <Check className={`mr-2 h-4 w-4 ${formSelectedParentId === null ? "opacity-100" : "opacity-0"}`} />
                                 Use: {topParentName}
-                                </CommandItem>
-                                <div className="my-1 border-t border-gray-200" />
-                                {data?.results?.map((facility: any) => (
+                              </CommandItem>
+                              <div className="my-1 border-t border-gray-200" />
+                              {data?.results?.map((facility: any) => (
                                 <CommandItem
-                                    key={facility._id || facility.id}
-                                    onSelect={() => {
+                                  key={facility._id || facility.id}
+                                  onSelect={() => {
                                     setFormSelectedParentId(facility._id || facility.id);
                                     setFormParentPopoverOpen(false);
-                                    }}
+                                  }}
                                 >
-                                    <Check
+                                  <Check
                                     className={`mr-2 h-4 w-4 ${formSelectedParentId === (facility._id || facility.id) ? "opacity-100" : "opacity-0"}`}
-                                    />
-                                    {facility.name}
+                                  />
+                                  {facility.name}
                                 </CommandItem>
-                                ))}
+                              ))}
                             </CommandGroup>
-                            </CommandList>
+                          </CommandList>
                         </Command>
-                        </PopoverContent>
+                      </PopoverContent>
                     </Popover>
-                    </div>
+                  </div>
                 </div>
 
                 {/* CONTACT INFO */}
@@ -539,7 +536,7 @@ export default function Facility() {
                     onBlur={() => handleBlur("email")}
                     className={`rounded-sm bg-[#F2F7FB] border-[#D9D9D9] border-t-0 border-x-0 border-b-2 py-6 focus:border-[#028700] ${errors.email ? "border-b-red-500" : ""}`}
                   />
-                   {errors.email && <p className="text-red-500 text-sm">{errors.email}</p>}
+                  {errors.email && <p className="text-red-500 text-sm">{errors.email}</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -552,7 +549,7 @@ export default function Facility() {
                       onBlur={() => handleBlur("phone1")}
                       className={`rounded-sm bg-[#F2F7FB] border-[#D9D9D9] border-t-0 border-x-0 border-b-2 py-6 focus:border-[#028700] ${errors.phone1 ? "border-b-red-500" : ""}`}
                     />
-                     {errors.phone1 && <p className="text-red-500 text-sm">{errors.phone1}</p>}
+                    {errors.phone1 && <p className="text-red-500 text-sm">{errors.phone1}</p>}
                   </div>
                   <div className="space-y-1">
                     <Label>Phone 2 (Optional)</Label>
@@ -566,50 +563,50 @@ export default function Facility() {
                 </div>
 
                 <div className="border-t border-gray-100 pt-4 mt-4">
-                    <h3 className="text-sm font-bold text-gray-500 uppercase mb-4">Location Details</h3>
-                    
-                    {/* COUNTRY & CITY */}
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="space-y-1">
-                            <Label>Country <span className="text-red-500">*</span></Label>
-                            <Input
-                                value={form.location.country}
-                                onChange={(e) => setForm({ ...form, location: { ...form.location, country: e.target.value } })}
-                                className="bg-[#F2F7FB] border-0 border-b-2 border-[#D9D9D9] focus-visible:ring-0 focus-visible:border-[#028700]"
-                            />
-                             {errors.country && <p className="text-red-500 text-sm">{errors.country}</p>}
-                        </div>
-                        <div className="space-y-1">
-                            <Label>City <span className="text-red-500">*</span></Label>
-                            <Input
-                                value={form.location.city}
-                                onChange={(e) => setForm({ ...form, location: { ...form.location, city: e.target.value } })}
-                                className="bg-[#F2F7FB] border-0 border-b-2 border-[#D9D9D9] focus-visible:ring-0 focus-visible:border-[#028700]"
-                            />
-                             {errors.city && <p className="text-red-500 text-sm">{errors.city}</p>}
-                        </div>
-                    </div>
+                  <h3 className="text-sm font-bold text-gray-500 uppercase mb-4">Location Details</h3>
 
-                    {/* ADDRESS */}
+                  {/* COUNTRY & CITY */}
+                  <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="space-y-1">
-                        <Label>Full Address <span className="text-red-500">*</span></Label>
-                        <Input
-                            placeholder="e.g., 123 Health Road, Yaoundé"
-                            value={form.location.address}
-                            onChange={(e) => setForm({ ...form, location: { ...form.location, address: e.target.value } })}
-                            onBlur={() => handleBlur("address")}
-                            className={`rounded-sm bg-[#F2F7FB] border-[#D9D9D9] border-t-0 border-x-0 border-b-2 py-6 focus:border-[#028700] ${errors.address ? "border-b-red-500" : ""}`}
-                        />
-                        {errors.address && <p className="text-red-500 text-sm">{errors.address}</p>}
+                      <Label>Country <span className="text-red-500">*</span></Label>
+                      <Input
+                        value={form.location.country}
+                        onChange={(e) => setForm({ ...form, location: { ...form.location, country: e.target.value } })}
+                        className="bg-[#F2F7FB] border-0 border-b-2 border-[#D9D9D9] focus-visible:ring-0 focus-visible:border-[#028700]"
+                      />
+                      {errors.country && <p className="text-red-500 text-sm">{errors.country}</p>}
                     </div>
+                    <div className="space-y-1">
+                      <Label>City <span className="text-red-500">*</span></Label>
+                      <Input
+                        value={form.location.city}
+                        onChange={(e) => setForm({ ...form, location: { ...form.location, city: e.target.value } })}
+                        className="bg-[#F2F7FB] border-0 border-b-2 border-[#D9D9D9] focus-visible:ring-0 focus-visible:border-[#028700]"
+                      />
+                      {errors.city && <p className="text-red-500 text-sm">{errors.city}</p>}
+                    </div>
+                  </div>
 
-                    {/* COORDS DISPLAY (Read only mostly) */}
-                    <div className="grid grid-cols-2 gap-4 mt-4 text-xs text-gray-400">
-                        <div>Lat: {form.location.latitude.toFixed(6)}</div>
-                        <div>Lng: {form.location.longitude.toFixed(6)}</div>
-                    </div>
+                  {/* ADDRESS */}
+                  <div className="space-y-1">
+                    <Label>Full Address <span className="text-red-500">*</span></Label>
+                    <Input
+                      placeholder="e.g., 123 Health Road, Yaoundé"
+                      value={form.location.address}
+                      onChange={(e) => setForm({ ...form, location: { ...form.location, address: e.target.value } })}
+                      onBlur={() => handleBlur("address")}
+                      className={`rounded-sm bg-[#F2F7FB] border-[#D9D9D9] border-t-0 border-x-0 border-b-2 py-6 focus:border-[#028700] ${errors.address ? "border-b-red-500" : ""}`}
+                    />
+                    {errors.address && <p className="text-red-500 text-sm">{errors.address}</p>}
+                  </div>
+
+                  {/* COORDS DISPLAY (Read only mostly) */}
+                  <div className="grid grid-cols-2 gap-4 mt-4 text-xs text-gray-400">
+                    <div>Lat: {form.location.latitude.toFixed(6)}</div>
+                    <div>Lng: {form.location.longitude.toFixed(6)}</div>
+                  </div>
                 </div>
-                
+
                 {/* SUBMIT */}
                 <div className="flex justify-end pt-6 pb-10 lg:pb-0">
                   <Button
