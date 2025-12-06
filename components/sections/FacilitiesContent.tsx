@@ -24,7 +24,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { FacilityDetailSheet } from "../FacilityDetailSheet";
 import GoogleMapViewer from "@/components/team/GoogleMapViewer";
-import { DATA_ENTRIES_TAB_ID } from "@/utils/data";
+import { useRouter } from "next/navigation";
 import {
     Tooltip,
     TooltipContent,
@@ -166,7 +166,8 @@ const TimeUnitItem = ({ label, value, status, isSelected }: {
 };
 
 /* ────────────────────── MAIN COMPONENT ────────────────────── */
-export default function FacilitiesContent({ setActiveTab }: { setActiveTab?: React.Dispatch<React.SetStateAction<string>> }) {
+export default function FacilitiesContent() {
+    const router = useRouter();
     const userDataString = typeof window !== 'undefined' ? localStorage.getItem('userData') : null;
     const personel = userDataString ? JSON.parse(userDataString) : null;
     const currentUserFacilityId = personel?.facility?.id;
@@ -472,10 +473,7 @@ export default function FacilitiesContent({ setActiveTab }: { setActiveTab?: Rea
                                                     localStorage.setItem("pendingStatusFilter", targetStatus);
                                                     localStorage.setItem("pendingDate", unit.date.toISOString());
 
-                                                    if (setActiveTab) {
-                                                        setActiveTab(DATA_ENTRIES_TAB_ID);
-                                                        localStorage.setItem("app:activeTab", DATA_ENTRIES_TAB_ID);
-                                                    }
+                                                    router.push('/data_entries');
 
                                                     toast.success(`${row.facilityName} → ${targetStatus === "pending" ? "Needs Review" : "Completed"}`);
                                                 }}

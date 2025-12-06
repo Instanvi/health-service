@@ -1,6 +1,5 @@
 "use client";
 
-import DashboardContent from "@/components/sections/DashboardContent";
 import AppHeader from "@/components/sections/Header";
 import { NAV_ITEMS } from "@/utils/data";
 import { useEffect, useMemo, useState } from "react";
@@ -19,11 +18,6 @@ const MainLayout = ({
   children: React.ReactNode;
 }) => {
   const router = useRouter();
-
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    if (typeof window === "undefined") return "data_entries";
-    return localStorage.getItem("app:activeTab") || "data_entries";
-  });
 
   const [userFacility, setUserFacility] = useState<string | null>(null);
   const [data, setData] = useState<PersonalityData | null>(null);
@@ -59,10 +53,7 @@ const MainLayout = ({
     fetchPersonality();
   }, [router]);
 
-  // Save active tab to localStorage
-  useEffect(() => {
-    localStorage.setItem("app:activeTab", activeTab);
-  }, [activeTab]);
+
 
   // Filter nav items by role
   const filteredNavItems = useMemo(() => {
@@ -75,9 +66,7 @@ const MainLayout = ({
     return NAV_ITEMS;
   }, [userFacility]);
 
-  const ActiveComponent =
-    filteredNavItems.find((item) => item.id === activeTab)?.Component ||
-    DashboardContent;
+
 
 
   if (!data || !userFacility) return null;
@@ -85,15 +74,13 @@ const MainLayout = ({
   return (
     <div className="min-h-screen bg-gray-100">
       <AppHeader
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
         navItems={filteredNavItems}
         email={data?.email?.[0] || "user@example.com"}
         userName={`${data?.first_name} ${data?.last_name}`}
         role={data?.role.name}
       />
       <main className="min-h-screen pl-20">
-        <ActiveComponent setActiveTab={setActiveTab} />
+        {children}
       </main>
     </div>
   );

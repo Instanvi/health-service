@@ -12,23 +12,23 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { UserData } from "@/payload";
 import { cn } from "@/lib/utils";
 
 interface AppSidebarProps {
-  activeTab: string;
-  setActiveTab: React.Dispatch<React.SetStateAction<string>>;
   navItems: NavItem[];
   userName?: string;
   email?: string;
   role?: string;
 }
 
-const AppSidebar: FC<AppSidebarProps> = ({ activeTab, setActiveTab, navItems, userName, email, role }) => {
+const AppSidebar: FC<AppSidebarProps> = ({ navItems, userName, email, role }) => {
   const router = useRouter();
+  const pathname = usePathname();
   const [isSignOutOpen, setIsSignOutOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -44,7 +44,7 @@ const AppSidebar: FC<AppSidebarProps> = ({ activeTab, setActiveTab, navItems, us
     router.push("/sign-in");
   };
 
-  const isActiveProfile = activeTab === navItems[0]?.id;
+  const isActiveProfile = pathname.startsWith('/settings');
 
   // Filter nav items that should be displayed (exclude settings from main nav, it's in profile)
   const displayNavItems = navItems.filter(item => item.id !== 'settings');
@@ -71,8 +71,8 @@ const AppSidebar: FC<AppSidebarProps> = ({ activeTab, setActiveTab, navItems, us
           </button>
 
           {/* Logo Section */}
-          <div
-            onClick={() => setActiveTab(facilityType === 'health_center' ? navItems[0]?.id : navItems[1]?.id)}
+          <Link
+            href={facilityType === 'health_center' ? navItems[0]?.href : navItems[1]?.href}
             className={cn(
               "flex items-center justify-center py-4 cursor-pointer border-b border-green-600",
               isExpanded ? "px-4" : "px-2"
@@ -83,19 +83,19 @@ const AppSidebar: FC<AppSidebarProps> = ({ activeTab, setActiveTab, navItems, us
             ) : (
               <Image src="/images/min-logo.png" alt="logo" width={30} height={30} className="object-contain" />
             )}
-          </div>
+          </Link>
 
           {/* Navigation Links */}
           <nav className="flex-1 flex flex-col py-4 space-y-1 px-2">
             {displayNavItems.map(item => {
-              const isActive = activeTab === item.id;
+              const isActive = pathname.startsWith(item.href);
               const Icon = item.icon;
 
               return (
                 <Tooltip key={item.id}>
                   <TooltipTrigger asChild>
-                    <button
-                      onClick={() => setActiveTab(item.id)}
+                    <Link
+                      href={item.href}
                       className={cn(
                         "flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 w-full",
                         isActive
@@ -110,7 +110,7 @@ const AppSidebar: FC<AppSidebarProps> = ({ activeTab, setActiveTab, navItems, us
                           {item.label}
                         </span>
                       )}
-                    </button>
+                    </Link>
                   </TooltipTrigger>
                   {!isExpanded && (
                     <TooltipContent side="right" className="bg-gray-900 text-white rounded-md px-3 py-1.5 text-sm">
@@ -128,8 +128,8 @@ const AppSidebar: FC<AppSidebarProps> = ({ activeTab, setActiveTab, navItems, us
             {navItems.find(item => item.id === 'settings') && facilityType !== 'health_center' && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setActiveTab('settings')}
+                  <Link
+                    href="/settings"
                     className={cn(
                       "flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 w-full",
                       isActiveProfile
@@ -145,7 +145,7 @@ const AppSidebar: FC<AppSidebarProps> = ({ activeTab, setActiveTab, navItems, us
                         <span className="text-xs text-green-200 truncate w-full">{email}</span>
                       </div>
                     )}
-                  </button>
+                  </Link>
                 </TooltipTrigger>
                 {!isExpanded && (
                   <TooltipContent side="right" className="bg-gray-900 text-white rounded-md px-3 py-1.5 text-sm">
