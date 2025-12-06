@@ -46,6 +46,9 @@ import {
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet";
+import { useCreateCampaign } from "./hooks";
+import { useTeamMembers } from "../team/hooks/useTeamMembers";
+import { toast } from "sonner";
 
 // Types
 type CampaignStatus = "live" | "complete" | "paused" | "cancelled";
@@ -170,12 +173,25 @@ export function Campaigns() {
     const [isPanelOpen, setIsPanelOpen] = React.useState(false);
     const [activeTab, setActiveTab] = React.useState<"details" | "members">("details");
 
+    // Fetch hooks
+    const { data: teamMembers } = useTeamMembers();
+    const createCampaignMutation = useCreateCampaign();
+
     // Form states
-    const [campaignName, setCampaignName] = React.useState("");
-    const [teamId, setTeamId] = React.useState("");
-    const [startDate, setStartDate] = React.useState<Date>();
-    const [endDate, setEndDate] = React.useState<Date>();
-    const [description, setDescription] = React.useState("");
+    const [formData, setFormData] = React.useState({
+        name: "",
+        description: "",
+        manager_personality_id: "",
+        start_date: undefined as Date | undefined,
+        end_date: undefined as Date | undefined,
+    });
+
+    const [errors, setErrors] = React.useState({
+        name: false,
+        manager_personality_id: false,
+        start_date: false,
+        end_date: false,
+    });
 
     // Members tab states
     const [selectedZone, setSelectedZone] = React.useState("");
@@ -197,16 +213,46 @@ export function Campaigns() {
     };
 
     const handleSave = () => {
-        // Handle save logic here
-        console.log("Saving campaign...", {
-            campaignName,
-            teamId,
-            startDate,
-            endDate,
-            description,
-            members,
+        // Validate fields
+        const newErrors = {
+            name: !formData.name,
+            manager_personality_id: !formData.manager_personality_id,
+            start_date: !formData.start_date,
+            end_date: !formData.end_date,
+        };
+
+        setErrors(newErrors);
+
+        if (Object.values(newErrors).some(error => error)) {
+            toast.error("Please fill in all required fields");
+            return;
+        }
+
+        const payload = {
+            name: formData.name,
+            description: formData.description,
+            manager_personality_id: formData.manager_personality_id,
+            start_date: formData.start_date ? format(formData.start_date, "yyyy-MM-dd") : "",
+            end_date: formData.end_date ? format(formData.end_date, "yyyy-MM-dd") : "",
+        };
+
+        createCampaignMutation.mutate(payload, {
+            onSuccess: () => {
+                toast.success("Campaign created successfully!");
+                // Reset and close
+                setFormData({
+                    name: "",
+                    description: "",
+                    manager_personality_id: "",
+                    start_date: undefined,
+                    end_date: undefined,
+                });
+                setIsPanelOpen(false);
+            },
+            onError: (err: any) => {
+                toast.error(err.message || "Failed to create campaign");
+            }
         });
-        setIsPanelOpen(false);
     };
 
     // Filter data based on search
@@ -478,51 +524,82 @@ export function Campaigns() {
                             <div className="space-y-6 animate-in fade-in duration-300 slide-in-from-right-5">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Campaign Name
+                                        Campaign Name <span className="text-red-500">*</span>
                                     </label>
                                     <Input
-                                        value={campaignName}
-                                        onChange={(e) => setCampaignName(e.target.value)}
+                                        value={formData.name}
+                                        onChange={(e) => {
+                                            setFormData(prev => ({ ...prev, name: e.target.value }));
+                                            setErrors(prev => ({ ...prev, name: false }));
+                                        }}
                                         placeholder="Douala 44"
-                                        className="rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:border-b-[#04b301] focus-visible:ring-0"
+                                        className={cn(
+                                            "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0",
+                                            errors.name
+                                                ? "border-b-red-500 focus:border-b-red-500"
+                                                : "border-b-gray-300 focus:border-b-[#04b301]"
+                                        )}
                                     />
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Team ID
+                                        Campaign Manager <span className="text-red-500">*</span>
                                     </label>
-                                    <Input
-                                        value={teamId}
-                                        onChange={(e) => setTeamId(e.target.value)}
-                                        placeholder="00254"
-                                        className="rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:border-b-[#04b301] focus-visible:ring-0"
-                                    />
+                                    <Select
+                                        value={formData.manager_personality_id}
+                                        onValueChange={(value) => {
+                                            setFormData(prev => ({ ...prev, manager_personality_id: value }));
+                                            setErrors(prev => ({ ...prev, manager_personality_id: false }));
+                                        }}
+                                    >
+                                        <SelectTrigger className={cn(
+                                            "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0",
+                                            errors.manager_personality_id
+                                                ? "border-b-red-500 focus:border-b-red-500"
+                                                : "border-b-gray-300 focus:border-b-[#04b301]"
+                                        )}>
+                                            <SelectValue placeholder="Select Manager" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {teamMembers?.map((member: any) => (
+                                                <SelectItem key={member._id} value={member._id}>
+                                                    {member.first_name} {member.last_name} ({member.username})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Start Date
+                                            Start Date <span className="text-red-500">*</span>
                                         </label>
                                         <Popover>
                                             <PopoverTrigger asChild>
                                                 <Button
                                                     variant="outline"
                                                     className={cn(
-                                                        "w-full justify-start text-left font-normal rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:border-b-[#04b301] hover:bg-blue-50",
-                                                        !startDate && "text-muted-foreground"
+                                                        "w-full justify-start text-left font-normal rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0 hover:bg-blue-50",
+                                                        !formData.start_date && "text-muted-foreground",
+                                                        errors.start_date
+                                                            ? "border-b-red-500 focus:border-b-red-500"
+                                                            : "border-b-gray-300 focus:border-b-[#04b301]"
                                                     )}
                                                 >
                                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                                    {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
+                                                    {formData.start_date ? format(formData.start_date, "PPP") : <span>Pick a date</span>}
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-auto p-0" align="start">
                                                 <Calendar
                                                     mode="single"
-                                                    selected={startDate}
-                                                    onSelect={setStartDate}
+                                                    selected={formData.start_date}
+                                                    onSelect={(date) => {
+                                                        setFormData(prev => ({ ...prev, start_date: date }));
+                                                        setErrors(prev => ({ ...prev, start_date: false }));
+                                                    }}
                                                     initialFocus
                                                 />
                                             </PopoverContent>
@@ -531,26 +608,32 @@ export function Campaigns() {
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            End Date
+                                            End Date <span className="text-red-500">*</span>
                                         </label>
                                         <Popover>
                                             <PopoverTrigger asChild>
                                                 <Button
                                                     variant="outline"
                                                     className={cn(
-                                                        "w-full justify-start text-left font-normal rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:border-b-[#04b301] hover:bg-blue-50",
-                                                        !endDate && "text-muted-foreground"
+                                                        "w-full justify-start text-left font-normal rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0 hover:bg-blue-50",
+                                                        !formData.end_date && "text-muted-foreground",
+                                                        errors.end_date
+                                                            ? "border-b-red-500 focus:border-b-red-500"
+                                                            : "border-b-gray-300 focus:border-b-[#04b301]"
                                                     )}
                                                 >
                                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                                    {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
+                                                    {formData.end_date ? format(formData.end_date, "PPP") : <span>Pick a date</span>}
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-auto p-0" align="start">
                                                 <Calendar
                                                     mode="single"
-                                                    selected={endDate}
-                                                    onSelect={setEndDate}
+                                                    selected={formData.end_date}
+                                                    onSelect={(date) => {
+                                                        setFormData(prev => ({ ...prev, end_date: date }));
+                                                        setErrors(prev => ({ ...prev, end_date: false }));
+                                                    }}
                                                     initialFocus
                                                 />
                                             </PopoverContent>
@@ -563,8 +646,8 @@ export function Campaigns() {
                                         Description
                                     </label>
                                     <Textarea
-                                        value={description}
-                                        onChange={(e) => setDescription(e.target.value)}
+                                        value={formData.description}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                                         placeholder="some description"
                                         className="rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:border-b-[#04b301] focus-visible:ring-0 min-h-[150px]"
                                     />

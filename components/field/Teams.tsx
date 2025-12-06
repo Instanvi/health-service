@@ -18,6 +18,7 @@ import {
     useCreateTeamMember,
     CreateUserPayload,
 } from "../team/hooks/useTeamMembers";
+import { useCampaigns, useZonesByCampaign, useCreateTeam } from "./hooks";
 import { toast } from "sonner";
 import {
     Pagination,
@@ -155,21 +156,37 @@ export function Teams() {
     const [isAddMemberSheetOpen, setIsAddMemberSheetOpen] = React.useState(false);
     const [activeTab, setActiveTab] = React.useState<"details" | "members">("details");
 
+    // Fetch hooks
+    const { data: campaigns } = useCampaigns();
+    const [selectedCampaignId, setSelectedCampaignId] = React.useState<string>("");
+    const { data: zones } = useZonesByCampaign(selectedCampaignId);
+    const { data: allMembers } = useTeamMembers();
+    const createTeamMutation = useCreateTeam();
+
     // Form states - Details tab
-    const [teamName, setTeamName] = React.useState("");
-    const [teamId, setTeamId] = React.useState("");
-    const [tracker, setTracker] = React.useState("");
-    const [errors, setErrors] = React.useState({
-        teamName: false,
-        teamId: false,
-        tracker: false,
+    const [formData, setFormData] = React.useState({
+        name: "",
+        campaign_id: "",
+        zone_id: "",
+        members: [] as string[],
+        team_lead_id: "",
     });
 
-    // Members tab states
-    const [members, setMembers] = React.useState<Member[]>([
-        { id: 1, fullName: "Amos Paul", email: "amospaul@gmail.com", tel: "+237 582 114 584", lastActivity: "oct 19 | 15:16", isActive: true },
-        { id: 2, fullName: "Akendum Zac", email: "ake_zac@gmail.com", tel: "+237 854 114 222", lastActivity: "Yesterday" },
-    ]);
+    const [errors, setErrors] = React.useState({
+        name: false,
+        campaign_id: false,
+        zone_id: false,
+        members: false,
+        team_lead_id: false,
+    });
+
+    // Update form when campaign changes to reset zone
+    React.useEffect(() => {
+        if (formData.campaign_id !== selectedCampaignId) {
+            setSelectedCampaignId(formData.campaign_id);
+            setFormData(prev => ({ ...prev, zone_id: "" }));
+        }
+    }, [formData.campaign_id, selectedCampaignId]);
 
     // Add Member form states - Updated to match API payload
     const [newMember, setNewMember] = React.useState({
@@ -194,11 +211,6 @@ export function Teams() {
         password: false,
         repeatPassword: false,
     });
-
-    const handlePair = () => {
-        console.log("Pairing tracker:", tracker);
-        // Add pairing logic here
-    };
 
     const handleAddMember = () => {
         // Validate required fields
@@ -274,34 +286,38 @@ export function Teams() {
     const handleSave = () => {
         // Validate fields
         const newErrors = {
-            teamName: !teamName,
-            teamId: !teamId,
-            tracker: !tracker,
+            name: !formData.name,
+            campaign_id: !formData.campaign_id,
+            zone_id: !formData.zone_id,
+            members: formData.members.length === 0,
+            team_lead_id: !formData.team_lead_id,
         };
 
         setErrors(newErrors);
 
         if (Object.values(newErrors).some(error => error)) {
+            toast.error("Please fill in all required fields");
             return;
         }
 
-        console.log("Saving team...", {
-            teamName,
-            teamId,
-            tracker,
-            members,
+        createTeamMutation.mutate(formData, {
+            onSuccess: () => {
+                toast.success("Team created successfully!");
+                // Reset and close
+                setFormData({
+                    name: "",
+                    campaign_id: "",
+                    zone_id: "",
+                    members: [],
+                    team_lead_id: "",
+                });
+                setIsSheetOpen(false);
+                setActiveTab("details");
+            },
+            onError: (err: any) => {
+                toast.error(err.message || "Failed to create team");
+            }
         });
-
-        // Reset and close
-        setTeamName("");
-        setTeamId("");
-        setTracker("");
-        setMembers([
-            { id: 1, fullName: "Amos Paul", email: "amospaul@gmail.com", tel: "+237 582 114 584", lastActivity: "oct 19 | 15:16", isActive: true },
-            { id: 2, fullName: "Akendum Zac", email: "ake_zac@gmail.com", tel: "+237 854 114 222", lastActivity: "Yesterday" },
-        ]);
-        setIsSheetOpen(false);
-        setActiveTab("details");
     };
 
     // Filter data based on search
@@ -358,6 +374,12 @@ export function Teams() {
     });
 
     const totalPages = table.getPageCount();
+
+    // Helper to get member name
+    const getMemberName = (id: string) => {
+        const member = allMembers?.find((m: any) => m._id === id);
+        return member ? `${member.first_name} ${member.last_name}` : id;
+    };
 
     return (
         <>
@@ -596,18 +618,77 @@ export function Teams() {
                             <div className="space-y-6 animate-in max-w-[800px] mx-auto fade-in duration-300 slide-in-from-right-5">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Team Name
+                                        Campaign <span className="text-red-500">*</span>
+                                    </label>
+                                    <Select
+                                        value={formData.campaign_id}
+                                        onValueChange={(value) => {
+                                            setFormData(prev => ({ ...prev, campaign_id: value }));
+                                            setErrors(prev => ({ ...prev, campaign_id: false }));
+                                        }}
+                                    >
+                                        <SelectTrigger className={cn(
+                                            "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0",
+                                            errors.campaign_id
+                                                ? "border-b-red-500 focus:border-b-red-500"
+                                                : "border-b-gray-300 focus:border-b-[#04b301]"
+                                        )}>
+                                            <SelectValue placeholder="Select Campaign" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {campaigns?.results?.map((campaign: any) => (
+                                                <SelectItem key={campaign.id} value={campaign.id}>
+                                                    {campaign.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Zone <span className="text-red-500">*</span>
+                                    </label>
+                                    <Select
+                                        value={formData.zone_id}
+                                        onValueChange={(value) => {
+                                            setFormData(prev => ({ ...prev, zone_id: value }));
+                                            setErrors(prev => ({ ...prev, zone_id: false }));
+                                        }}
+                                        disabled={!formData.campaign_id}
+                                    >
+                                        <SelectTrigger className={cn(
+                                            "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0",
+                                            errors.zone_id
+                                                ? "border-b-red-500 focus:border-b-red-500"
+                                                : "border-b-gray-300 focus:border-b-[#04b301]"
+                                        )}>
+                                            <SelectValue placeholder="Select Zone" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {zones?.map((zone: any) => (
+                                                <SelectItem key={zone.id} value={zone.id}>
+                                                    {zone.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Team Name <span className="text-red-500">*</span>
                                     </label>
                                     <Input
-                                        value={teamName}
+                                        value={formData.name}
                                         onChange={(e) => {
-                                            setTeamName(e.target.value);
-                                            setErrors(prev => ({ ...prev, teamName: false }));
+                                            setFormData(prev => ({ ...prev, name: e.target.value }));
+                                            setErrors(prev => ({ ...prev, name: false }));
                                         }}
-                                        placeholder="Douala 44"
+                                        placeholder="Enter team name"
                                         className={cn(
                                             "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus-visible:ring-0",
-                                            errors.teamName
+                                            errors.name
                                                 ? "border-b-red-500 focus:border-b-red-500"
                                                 : "border-b-gray-300 focus:border-b-[#04b301]"
                                         )}
@@ -616,52 +697,70 @@ export function Teams() {
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Team ID
+                                        Members <span className="text-red-500">*</span>
                                     </label>
-                                    <Input
-                                        value={teamId}
-                                        onChange={(e) => {
-                                            setTeamId(e.target.value);
-                                            setErrors(prev => ({ ...prev, teamId: false }));
-                                        }}
-                                        placeholder="00254"
-                                        className={cn(
-                                            "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus-visible:ring-0",
-                                            errors.teamId
-                                                ? "border-b-red-500 focus:border-b-red-500"
-                                                : "border-b-gray-300 focus:border-b-[#04b301]"
-                                        )}
-                                    />
-                                </div>
+                                    <div className="border border-gray-200 rounded-md p-4 max-h-60 overflow-y-auto">
+                                        {allMembers?.map((member: any) => (
+                                            <div key={member._id} className="flex items-center space-x-2 py-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`member-${member._id}`}
+                                                    checked={formData.members.includes(member._id)}
+                                                    onChange={(e) => {
+                                                        const isChecked = e.target.checked;
+                                                        setFormData(prev => {
+                                                            const newMembers = isChecked
+                                                                ? [...prev.members, member._id]
+                                                                : prev.members.filter(id => id !== member._id);
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Tracker
-                                    </label>
-                                    <div className="flex gap-3">
-                                        <Input
-                                            value={tracker}
-                                            onChange={(e) => {
-                                                setTracker(e.target.value);
-                                                setErrors(prev => ({ ...prev, tracker: false }));
-                                            }}
-                                            placeholder="2Sxaodg09892×254"
-                                            className={cn(
-                                                "flex-1 rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus-visible:ring-0",
-                                                errors.tracker
-                                                    ? "border-b-red-500 focus:border-b-red-500"
-                                                    : "border-b-gray-300 focus:border-b-[#04b301]"
-                                            )}
-                                        />
-                                        <Button
-                                            onClick={handlePair}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-6 rounded-sm"
-                                        >
-                                            <Link2 className="h-4 w-4 mr-2" />
-                                            Pair
-                                        </Button>
+                                                            // If removing a member who is team lead, clear team lead
+                                                            const newTeamLead = (!isChecked && prev.team_lead_id === member._id)
+                                                                ? ""
+                                                                : prev.team_lead_id;
+
+                                                            return { ...prev, members: newMembers, team_lead_id: newTeamLead };
+                                                        });
+                                                        setErrors(prev => ({ ...prev, members: false }));
+                                                    }}
+                                                    className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-600"
+                                                />
+                                                <label htmlFor={`member-${member._id}`} className="text-sm text-gray-700 cursor-pointer select-none">
+                                                    {member.first_name} {member.last_name} ({member.username})
+                                                </label>
+                                            </div>
+                                        ))}
                                     </div>
+                                    {errors.members && <p className="text-xs text-red-500 mt-1">Select at least one member</p>}
                                 </div>
+
+                                {formData.members.length > 0 && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Team Lead <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="border border-gray-200 rounded-md p-4">
+                                            {formData.members.map((memberId) => (
+                                                <div key={memberId} className="flex items-center space-x-2 py-2">
+                                                    <input
+                                                        type="radio"
+                                                        id={`lead-${memberId}`}
+                                                        name="team_lead"
+                                                        checked={formData.team_lead_id === memberId}
+                                                        onChange={() => {
+                                                            setFormData(prev => ({ ...prev, team_lead_id: memberId }));
+                                                            setErrors(prev => ({ ...prev, team_lead_id: false }));
+                                                        }}
+                                                        className="h-4 w-4 border-gray-300 text-green-600 focus:ring-green-600"
+                                                    />
+                                                    <label htmlFor={`lead-${memberId}`} className="text-sm text-gray-700 cursor-pointer select-none">
+                                                        {getMemberName(memberId)}
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {errors.team_lead_id && <p className="text-xs text-red-500 mt-1">Select a team lead</p>}
+                                    </div>
+                                )}
                             </div>
                         )}
 
