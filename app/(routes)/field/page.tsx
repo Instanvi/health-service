@@ -1,5 +1,5 @@
-import FieldWorks from "@/components/sections/FieldWorks";
+import { redirect } from "next/navigation";
 
 export default function FieldPage() {
-    return <FieldWorks />;
+  redirect("/field/live");
 }
