@@ -7,7 +7,7 @@ import { toast } from "sonner";
 /* ——— TYPES ——— */
 
 export interface Team {
-    id: string;
+    _id: string;
     name: string;
     campaign_id: string;
     zone_id: string;
@@ -71,13 +71,16 @@ async function fetchTeamsByCampaign(campaignId: string, campaignCode?: string): 
     return Array.isArray(data) ? data : (data.results || []);
 }
 
-async function fetchTeamsByZone(zoneId: string, zoneCode?: string): Promise<Team[]> {
+async function fetchTeamsByZone(options: { zoneId: string; zoneCode?: string; page?: number; limit?: number }): Promise<{ teams: Team[]; count: number }> {
+    const { zoneId, zoneCode, page = 1, limit = 10 } = options;
     const token = Cookies.get("authToken");
-    if (!zoneId) return [];
+    if (!zoneId) return { teams: [], count: 0 };
 
     const queryParams = new URLSearchParams();
     queryParams.append("zone_id", zoneId);
     if (zoneCode) queryParams.append("zone_code", zoneCode);
+    queryParams.append("page", page.toString());
+    queryParams.append("page_size", limit.toString());
 
     const res = await fetch(`${API_BASE}/team/zone?${queryParams.toString()}`, {
         headers: {
@@ -92,7 +95,10 @@ async function fetchTeamsByZone(zoneId: string, zoneCode?: string): Promise<Team
     }
 
     const data = await res.json();
-    return Array.isArray(data) ? data : (data.results || []);
+    return {
+        teams: data.teams || [],
+        count: data.pagination?.total_items || data.teams?.length || 0
+    };
 }
 
 async function fetchTeamMembers(teamId: string, teamCode?: string): Promise<TeamMember[]> {
@@ -167,11 +173,11 @@ export function useTeamsByCampaign(campaignId: string, campaignCode?: string) {
     });
 }
 
-export function useTeamsByZone(zoneId: string, zoneCode?: string) {
+export function useTeamsByZone(options: { zoneId: string; zoneCode?: string; page?: number; limit?: number }) {
     return useQuery({
-        queryKey: ["teams", "zone", zoneId, zoneCode],
-        queryFn: () => fetchTeamsByZone(zoneId, zoneCode),
-        enabled: !!zoneId,
+        queryKey: ["teams", "zone", options.zoneId, options.zoneCode, options.page, options.limit],
+        queryFn: () => fetchTeamsByZone(options),
+        enabled: !!options.zoneId,
         staleTime: 5 * 60 * 1000,
     });
 }

@@ -10,7 +10,7 @@ import {
     VisibilityState,
 } from "@tanstack/react-table";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronDown, Loader2, Settings, Search, Plus, MapPin, X, Upload } from "lucide-react";
+import { ChevronDown, Loader2, Settings, Search, Plus, MapPin, Check, ChevronsUpDown, Trash2 } from "lucide-react";
 import {
     Pagination,
     PaginationContent,
@@ -35,6 +35,24 @@ import {
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { GoogleMap, Polygon, Marker } from "@react-google-maps/api";
+import { useGoogleMaps } from "@/lib/GoogleMapsProvider";
+import { useCreateZone } from "./hooks/useZones";
+import { useCampaigns } from "./hooks/useCampaigns";
+import { toast } from "sonner";
 
 // Types
 interface Zone {
@@ -99,6 +117,9 @@ const columns: ColumnDef<Zone>[] = [
     },
 ];
 
+const mapContainerStyle = { width: "100%", height: "400px", borderRadius: "0.5rem" };
+const defaultCenter = { lat: 4.0511, lng: 9.7679 }; // Douala
+
 export function Zones() {
     const [searchQuery, setSearchQuery] = React.useState("");
     const [isLoading] = React.useState(false);
@@ -112,60 +133,89 @@ export function Zones() {
 
     // Form states
     const [zoneName, setZoneName] = React.useState("");
-    const [zoneId, setZoneId] = React.useState("");
-    const [shapeFile, setShapeFile] = React.useState<File | null>(null);
+    const [description, setDescription] = React.useState("");
+    const [campaignId, setCampaignId] = React.useState("");
+    const [boundaries, setBoundaries] = React.useState<{ lat: number; lng: number }[]>([]);
+
     const [errors, setErrors] = React.useState({
         zoneName: false,
-        zoneId: false,
-        shapeFile: false,
+        campaignId: false,
+        boundaries: false,
     });
 
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    // Campaign Dropdown State
+    const [campaignOpen, setCampaignOpen] = React.useState(false);
+    const [campaignSearch, setCampaignSearch] = React.useState("");
+    const [campaignPage, setCampaignPage] = React.useState(1);
+    const { data: campaignsData, isLoading: loadingCampaigns } = useCampaigns({
+        page: campaignPage,
+        limit: 10,
+    });
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            // Validate file type (kml or geojson)
-            const validExtensions = ['.kml', '.geojson', '.json'];
-            const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    // Map State
+    const { isLoaded } = useGoogleMaps();
+    const createZoneMutation = useCreateZone();
 
-            if (validExtensions.includes(fileExtension)) {
-                setShapeFile(file);
-                setErrors(prev => ({ ...prev, shapeFile: false }));
-            } else {
-                setErrors(prev => ({ ...prev, shapeFile: true }));
-                alert('Only kml or Geojson is supported');
-            }
+    const handleMapClick = (e: google.maps.MapMouseEvent) => {
+        if (e.latLng) {
+            const newPoint = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+            setBoundaries([...boundaries, newPoint]);
+            setErrors(prev => ({ ...prev, boundaries: false }));
         }
+    };
+
+    const handleUndoPoint = () => {
+        setBoundaries(prev => prev.slice(0, -1));
+    };
+
+    const handleClearPoints = () => {
+        setBoundaries([]);
     };
 
     const handleSave = () => {
         // Validate fields
         const newErrors = {
             zoneName: !zoneName,
-            zoneId: !zoneId,
-            shapeFile: !shapeFile,
+            campaignId: !campaignId,
+            boundaries: boundaries.length < 3,
         };
 
         setErrors(newErrors);
 
         // Check if any errors
         if (Object.values(newErrors).some(error => error)) {
+            if (newErrors.boundaries) {
+                toast.error("Please select at least 3 points to form a polygon");
+            } else {
+                toast.error("Please fill in all required fields");
+            }
             return;
         }
 
-        // Handle save logic here
-        console.log("Saving zone...", {
-            zoneName,
-            zoneId,
-            shapeFile,
-        });
+        // Close the polygon by adding the first point at the end
+        const closedBoundaries = [...boundaries, boundaries[0]];
+        const coordinates = [closedBoundaries.map(p => [p.lng, p.lat])]; // GeoJSON uses [lng, lat]
 
-        // Reset form and close panel
-        setZoneName("");
-        setZoneId("");
-        setShapeFile(null);
-        setIsPanelOpen(false);
+        const payload = {
+            campaign_id: campaignId,
+            name: zoneName,
+            description: description,
+            boundaries: {
+                type: "Polygon" as const,
+                coordinates: coordinates,
+            },
+        };
+
+        createZoneMutation.mutate(payload, {
+            onSuccess: () => {
+                // Reset form and close panel
+                setZoneName("");
+                setDescription("");
+                setCampaignId("");
+                setBoundaries([]);
+                setIsPanelOpen(false);
+            },
+        });
     };
 
     // Filter data based on search
@@ -199,6 +249,17 @@ export function Zones() {
     });
 
     const totalPages = table.getPageCount();
+
+    // Filter campaigns for dropdown
+    const filteredCampaigns = React.useMemo(() => {
+        if (!campaignsData?.campaigns) return [];
+        if (!campaignSearch) return campaignsData.campaigns;
+        return campaignsData.campaigns.filter(c =>
+            c.name.toLowerCase().includes(campaignSearch.toLowerCase())
+        );
+    }, [campaignsData, campaignSearch]);
+
+    const selectedCampaignName = campaignsData?.campaigns?.find(c => c._id === campaignId)?.name;
 
     return (
         <>
@@ -389,7 +450,7 @@ export function Zones() {
                     <div className="relative flex border-b gap-[14vw]">
                         {/* Title */}
                         <SheetHeader className="px-6 py-4 border-gray-200">
-                            <SheetTitle className="text-lg font-semibold text-gray-900">New Team</SheetTitle>
+                            <SheetTitle className="text-lg font-semibold text-gray-900">New Zone</SheetTitle>
                         </SheetHeader>
 
                         <div className="flex items-center gap-0 border-gray-200 max-w-[40vw]">
@@ -408,11 +469,100 @@ export function Zones() {
                     </div>
 
                     {/* Content */}
-                    <div className="p-6 h-[calc(100vh-200px)] max-w-[800px] mx-auto overflow-y-auto animate-in fade-in duration-300 slide-in-from-right-5">
+                    <div className="p-6 h-[calc(100vh-200px)] max-w-[600px] md:max-w-[800px]  mx-auto overflow-y-auto animate-in fade-in duration-300 slide-in-from-right-5">
                         <div className="space-y-6 animate-in fade-in duration-300 slide-in-from-right-5">
+
+                            {/* Campaign Selection */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Zone  Name
+                                    Campaign <span className="text-red-500">*</span>
+                                </label>
+                                <Popover open={campaignOpen} onOpenChange={setCampaignOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={campaignOpen}
+                                            className={cn(
+                                                "w-full justify-between rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0 hover:bg-blue-50",
+                                                errors.campaignId
+                                                    ? "border-b-red-500"
+                                                    : "border-b-gray-300 hover:border-b-[#04b301]"
+                                            )}
+                                        >
+                                            {selectedCampaignName || "Select campaign..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[400px] p-0">
+                                        <Command>
+                                            <CommandInput
+                                                placeholder="Search campaign..."
+                                                value={campaignSearch}
+                                                onValueChange={setCampaignSearch}
+                                            />
+                                            <CommandList>
+                                                {loadingCampaigns ? (
+                                                    <CommandEmpty>Loading...</CommandEmpty>
+                                                ) : filteredCampaigns.length === 0 ? (
+                                                    <CommandEmpty>No campaign found.</CommandEmpty>
+                                                ) : (
+                                                    <CommandGroup>
+                                                        {filteredCampaigns.map((campaign) => (
+                                                            <CommandItem
+                                                                key={campaign._id}
+                                                                value={campaign.name}
+                                                                onSelect={() => {
+                                                                    setCampaignId(campaign._id === campaignId ? "" : campaign._id);
+                                                                    setCampaignOpen(false);
+                                                                    setErrors(prev => ({ ...prev, campaignId: false }));
+                                                                }}
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        campaignId === campaign._id ? "opacity-100" : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                {campaign.name}
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                )}
+                                                <div className="flex items-center justify-between p-2 border-t">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setCampaignPage(p => Math.max(1, p - 1));
+                                                        }}
+                                                        disabled={campaignPage === 1}
+                                                    >
+                                                        Previous
+                                                    </Button>
+                                                    <span className="text-xs text-gray-500">Page {campaignPage}</span>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setCampaignPage(p => p + 1);
+                                                        }}
+                                                        disabled={!campaignsData?.campaigns || campaignsData.campaigns.length < 10}
+                                                    >
+                                                        Next
+                                                    </Button>
+                                                </div>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Zone Name <span className="text-red-500">*</span>
                                 </label>
                                 <Input
                                     value={zoneName}
@@ -432,53 +582,85 @@ export function Zones() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Zone ID
+                                    Description (Optional)
                                 </label>
                                 <Input
-                                    value={zoneId}
-                                    onChange={(e) => {
-                                        setZoneId(e.target.value);
-                                        setErrors(prev => ({ ...prev, zoneId: false }));
-                                    }}
-                                    placeholder="00254"
-                                    className={cn(
-                                        "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus-visible:ring-0",
-                                        errors.zoneId
-                                            ? "border-b-red-500 focus:border-b-red-500"
-                                            : "border-b-gray-300 focus:border-b-[#04b301]"
-                                    )}
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    placeholder="Zone description"
+                                    className="rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus-visible:ring-0 border-b-gray-300 focus:border-b-[#04b301]"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Shape File (Zone bounderies)
-                                </label>
-                                <div
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className={cn(
-                                        "rounded-none shadow-none py-12 px-5 border-b-2 border-x-0 border-t-0 bg-gray-50 cursor-pointer",
-                                        "flex flex-col items-center justify-center gap-3",
-                                        errors.shapeFile
-                                            ? "border-b-red-500"
-                                            : "border-b-gray-300 hover:border-b-[#04b301]"
-                                    )}
-                                >
-                                    <Upload className="h-8 w-8 text-gray-400" />
-                                    {shapeFile ? (
-                                        <p className="text-sm text-gray-700">{shapeFile.name}</p>
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="block text-sm font-medium text-gray-700">
+                                        Zone Boundaries <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleUndoPoint}
+                                            disabled={boundaries.length === 0}
+                                        >
+                                            Undo
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={handleClearPoints}
+                                            disabled={boundaries.length === 0}
+                                        >
+                                            <Trash2 className="h-4 w-4 mr-1" /> Clear
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className={cn(
+                                    "border rounded-lg overflow-hidden",
+                                    errors.boundaries ? "border-red-500" : "border-gray-200"
+                                )}>
+                                    {isLoaded ? (
+                                        <GoogleMap
+                                            mapContainerStyle={mapContainerStyle}
+                                            center={defaultCenter}
+                                            zoom={13}
+                                            onClick={handleMapClick}
+                                            options={{
+                                                mapTypeControl: false,
+                                                streetViewControl: false,
+                                                fullscreenControl: false,
+                                            }}
+                                        >
+                                            {boundaries.map((point, index) => (
+                                                <Marker
+                                                    key={index}
+                                                    position={point}
+                                                    label={(index + 1).toString()}
+                                                />
+                                            ))}
+                                            {boundaries.length > 0 && (
+                                                <Polygon
+                                                    paths={boundaries}
+                                                    options={{
+                                                        fillColor: "#028700",
+                                                        fillOpacity: 0.3,
+                                                        strokeColor: "#028700",
+                                                        strokeOpacity: 0.8,
+                                                        strokeWeight: 2,
+                                                    }}
+                                                />
+                                            )}
+                                        </GoogleMap>
                                     ) : (
-                                        <p className="text-sm text-gray-500">Click to upload file</p>
+                                        <div className="h-[400px] bg-gray-100 flex items-center justify-center">
+                                            <Loader2 className="animate-spin text-gray-400" />
+                                        </div>
                                     )}
                                 </div>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept=".kml,.geojson,.json"
-                                    onChange={handleFileChange}
-                                    className="hidden"
-                                />
-                                <p className="text-xs text-gray-500 mt-2 italic">Only kml or Geojson is supported</p>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Click on the map to add points for the zone boundary. You need at least 3 points.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -488,9 +670,17 @@ export function Zones() {
                         <div className="flex justify-end">
                             <Button
                                 onClick={handleSave}
+                                disabled={createZoneMutation.isPending}
                                 className="bg-green-600 hover:bg-green-700 text-white px-8 py-6 rounded-sm"
                             >
-                                Save
+                                {createZoneMutation.isPending ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    "Save"
+                                )}
                             </Button>
                         </div>
                     </div>

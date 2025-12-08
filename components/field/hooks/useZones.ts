@@ -44,13 +44,16 @@ export interface ZonesResponse {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.dappahealth.eu/dappa";
 
-async function fetchZonesByCampaign(campaignId: string, campaignCode?: string): Promise<Zone[]> {
+async function fetchZonesByCampaign(options: { campaignId: string; campaignCode?: string; page?: number; limit?: number }): Promise<{ zones: Zone[]; count: number }> {
+    const { campaignId, campaignCode, page = 1, limit = 10 } = options;
     const token = Cookies.get("authToken");
-    if (!campaignId) return [];
+    if (!campaignId) return { zones: [], count: 0 };
 
     const queryParams = new URLSearchParams();
     queryParams.append("campaign_id", campaignId);
     if (campaignCode) queryParams.append("campaign_code", campaignCode);
+    queryParams.append("page", page.toString());
+    queryParams.append("limit", limit.toString());
 
     const res = await fetch(`${API_BASE}/zone/campaign?${queryParams.toString()}`, {
         headers: {
@@ -64,11 +67,14 @@ async function fetchZonesByCampaign(campaignId: string, campaignCode?: string): 
         throw new Error(error.message || "Failed to load zones");
     }
 
-    // The API might return an array directly or a paginated response
-    // Based on other endpoints, it likely returns { results: [...] } or just [...]
-    // Adjusting to handle both cases safely
     const data = await res.json();
-    return Array.isArray(data) ? data : (data.results || []);
+    if (Array.isArray(data)) {
+        return { zones: data, count: data.length };
+    }
+    return {
+        zones: data.zones || data.results || [],
+        count: data.total_zones || data.count || (data.zones?.length || data.results?.length || 0)
+    };
 }
 
 async function createZone(payload: CreateZonePayload) {
@@ -110,11 +116,16 @@ async function updateZone({ id, payload }: { id: string; payload: UpdateZonePayl
 
 /* ——— HOOKS ——— */
 
-export function useZonesByCampaign(campaignId: string, campaignCode?: string) {
+export function useZonesByCampaign(options: { campaignId: string; campaignCode?: string; page?: number; limit?: number } | string) {
+    // Handle legacy string argument if necessary, or just force object. 
+    // Since I'm refactoring, I'll support both or just object.
+    // But to be clean, let's convert to object inside if string is passed (though I will update the caller).
+    const opts = typeof options === "string" ? { campaignId: options } : options;
+
     return useQuery({
-        queryKey: ["zones", "campaign", campaignId, campaignCode],
-        queryFn: () => fetchZonesByCampaign(campaignId, campaignCode),
-        enabled: !!campaignId,
+        queryKey: ["zones", "campaign", opts.campaignId, opts.campaignCode, opts.page, opts.limit],
+        queryFn: () => fetchZonesByCampaign(opts),
+        enabled: !!opts.campaignId,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 }

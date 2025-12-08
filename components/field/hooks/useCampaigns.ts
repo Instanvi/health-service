@@ -7,7 +7,7 @@ import { toast } from "sonner";
 /* ——— TYPES ——— */
 
 export interface Campaign {
-    id: string;
+    _id: string;
     name: string;
     description: string;
     manager_personality_id: string;
@@ -36,10 +36,14 @@ export interface UpdateCampaignPayload {
 }
 
 export interface CampaignsResponse {
-    count: number;
-    page: number;
-    limit: number;
-    results: Campaign[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+    };
+    filters: any;
+    campaigns: Campaign[];
 }
 
 export interface CampaignQueryParams {

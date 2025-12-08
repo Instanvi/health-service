@@ -18,20 +18,27 @@ export interface TeamMember {
   _id: string;
   username: string;
   first_name: string;
-  code: string;
   last_name: string;
-  gender: string;
-  metadata: UserMetadata;
   email: string[];
   phone: string[];
-  role: { id: string; name: string };
+  code: string;
+  gender: string;
+  is_team_lead?: boolean;
+}
+
+export interface TeamInfo {
+  _id: string;
+  name: string;
+  code: string;
+  campaign_id: string;
+  zone_id: string;
 }
 
 export interface TeamMembersResponse {
-  count: number;
-  page: number;
-  limit: number;
-  results: TeamMember[];
+  message: string;
+  team: TeamInfo;
+  members: TeamMember[];
+  total_members: number;
 }
 
 export interface CreateUserPayload {
@@ -49,9 +56,11 @@ export interface CreateUserPayload {
 
 /* ——— API FUNCTIONS ——— */
 
-const API_BASE =  process.env.NEXT_PUBLIC_API_URL || BASE_URL;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || BASE_URL;
 
-async function fetchFacilityPersonalities(facilityId: string): Promise<TeamMembersResponse> {
+// Keep this for backward compatibility if needed, or remove if unused.
+// The user didn't ask to remove it, but useFacilityPersonalities uses it.
+async function fetchFacilityPersonalities(facilityId: string): Promise<any> {
   const token = Cookies.get("authToken");
   if (!token) throw new Error("Authentication token missing");
 
@@ -74,11 +83,12 @@ async function fetchFacilityPersonalities(facilityId: string): Promise<TeamMembe
   return res.json();
 }
 
-async function fetchTeamMembers(): Promise<TeamMembersResponse> {
+async function fetchTeamMembers(teamId: string = "6936bf876cd418d5ac17aee1"): Promise<TeamMembersResponse> {
   const token = Cookies.get("authToken");
 
-  const res = await fetch(`${API_BASE}/facility/personalities`, {
+  const res = await fetch(`${API_BASE}/team/members?team_id=${teamId}`, {
     headers: {
+      accept: "application/json",
       Authorization: `Bearer ${token}`,
     },
   });
@@ -116,11 +126,11 @@ export function useFacilityPersonalities(facilityId: string) {
   });
 }
 
-export function useTeamMembers() {
+export function useTeamMembers(teamId?: string) {
   return useQuery({
-    queryKey: ["team-members"],
-    queryFn: fetchTeamMembers,
-    select: (data) => data?.results,
+    queryKey: ["team-members", teamId],
+    queryFn: () => fetchTeamMembers(teamId),
+    select: (data) => data?.members,
   });
 }
 

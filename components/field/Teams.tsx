@@ -2,15 +2,11 @@
 
 import * as React from "react";
 import {
-    useReactTable,
-    getCoreRowModel,
-    getPaginationRowModel,
     flexRender,
     ColumnDef,
-    VisibilityState,
 } from "@tanstack/react-table";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronDown, Loader2, Settings, Search, Plus, X, Eye, EyeOff, Link2 } from "lucide-react";
+import { ChevronDown, Loader2, Settings, Search, Plus, X, Eye, EyeOff, Link2, Check, ChevronsUpDown } from "lucide-react";
 import { DataTable } from "../PatientsTable";
 import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import {
@@ -18,7 +14,7 @@ import {
     useCreateTeamMember,
     CreateUserPayload,
 } from "../team/hooks/useTeamMembers";
-import { useCampaigns, useZonesByCampaign, useCreateTeam } from "./hooks";
+import { useCampaigns, useZonesByCampaign, useCreateTeam, useTeamsByZone, Team } from "./hooks";
 import { toast } from "sonner";
 import {
     Pagination,
@@ -41,6 +37,19 @@ import {
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,34 +61,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
-// Types
-interface Team {
-    id: string;
-    teamLead: string;
-    members: number;
-    activeCampaign: string;
-    status: "live" | "inactive";
-}
 
-interface Member {
-    id: number;
-    fullName: string;
-    email: string;
-    tel: string;
-    lastActivity: string;
-    isActive?: boolean;
-}
-
-// Sample data
-const TEAMS_DATA: Team[] = [
-    { id: "Team 001", teamLead: "Theresia Mbah", members: 3, activeCampaign: "Polio 2024", status: "live" },
-    { id: "Team 002", teamLead: "Peters Nze", members: 3, activeCampaign: "Polio 2024", status: "inactive" },
-    { id: "Team 003", teamLead: "Ayissi Bi Paul", members: 2, activeCampaign: "VIT A 2025", status: "inactive" },
-    { id: "Team 004", teamLead: "Ebeneza Ndoki", members: 2, activeCampaign: "VIT A 2025", status: "inactive" },
-    { id: "Team 005", teamLead: "Pierre Kwemo", members: 3, activeCampaign: "VIT A 2025", status: "live" },
-    { id: "Team 006", teamLead: "Chalefac Theodore", members: 3, activeCampaign: "VIT A 2025", status: "inactive" },
-    { id: "Team 007", teamLead: "Kuma  Theodore", members: 3, activeCampaign: "VIT A 2025", status: "inactive" },
-];
 
 // Status badge component
 function StatusBadge({ status }: { status: "live" | "inactive" }) {
@@ -94,44 +76,41 @@ function StatusBadge({ status }: { status: "live" | "inactive" }) {
 }
 
 // Column definitions
+// Column definitions
 const columns: ColumnDef<Team>[] = [
     {
-        accessorKey: "id",
+        accessorKey: "_id",
         header: "ID",
-        cell: ({ row }) => <span className="text-gray-700">{row.getValue("id")}</span>,
+        cell: ({ row }) => <span className="text-gray-700">{row.original._id?.substring(0, 8)}...</span>,
     },
     {
-        accessorKey: "teamLead",
-        header: "Team Lead",
-        cell: ({ row }) => <span className="text-gray-700">{row.getValue("teamLead")}</span>,
+        accessorKey: "name",
+        header: "Team Name",
+        cell: ({ row }) => <span className="text-gray-700">{row.getValue("name")}</span>,
+    },
+    {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ row }) => <span className="text-gray-700">{row.getValue("code")}</span>,
     },
     {
         accessorKey: "members",
         header: "Members",
         cell: ({ row }) => (
             <span className="text-gray-700">
-                {String(row.getValue("members")).padStart(2, "0")}
+                {String((row.getValue("members") as any[])?.length || 0).padStart(2, "0")}
             </span>
         ),
     },
     {
-        accessorKey: "activeCampaign",
-        header: "Active Campaign",
-        cell: ({ row }) => <span className="text-gray-700">{row.getValue("activeCampaign")}</span>,
-    },
-    {
         accessorKey: "status",
         header: "Status",
-        cell: ({ row }) => <StatusBadge status={row.getValue("status")} />,
+        cell: ({ row }) => <StatusBadge status="live" />, // Placeholder as status is not in API yet
     },
 ];
 
 export function Teams() {
     const [searchQuery, setSearchQuery] = React.useState("");
-    const [pageIndex, setPageIndex] = React.useState(0);
-    const pageSize = 10;
-
-    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
     const [currentUser, setCurrentUser] = React.useState<any>(null);
 
     // Load current user from localStorage
@@ -156,12 +135,15 @@ export function Teams() {
     const [isAddMemberSheetOpen, setIsAddMemberSheetOpen] = React.useState(false);
     const [activeTab, setActiveTab] = React.useState<"details" | "members">("details");
 
-    // Fetch hooks
-    const { data: campaigns } = useCampaigns();
-    const [selectedCampaignId, setSelectedCampaignId] = React.useState<string>("");
-    const { data: zones } = useZonesByCampaign(selectedCampaignId);
-    const { data: allMembers } = useTeamMembers();
-    const createTeamMutation = useCreateTeam();
+    // Campaign Dropdown State
+    const [campaignOpen, setCampaignOpen] = React.useState(false);
+    const [campaignSearch, setCampaignSearch] = React.useState("");
+    const [campaignPage, setCampaignPage] = React.useState(1);
+
+    // Zone Dropdown State
+    const [zoneOpen, setZoneOpen] = React.useState(false);
+    const [zoneSearch, setZoneSearch] = React.useState("");
+    const [zonePage, setZonePage] = React.useState(1);
 
     // Form states - Details tab
     const [formData, setFormData] = React.useState({
@@ -172,6 +154,60 @@ export function Teams() {
         team_lead_id: "",
     });
 
+    // Fetch hooks
+    const { data: campaignsData, isLoading: loadingCampaigns } = useCampaigns({
+        page: campaignPage,
+        limit: 10,
+    });
+    const { data: zonesData, isLoading: loadingZones } = useZonesByCampaign({
+        campaignId: formData.campaign_id,
+        page: zonePage,
+        limit: 10
+    });
+
+    // Teams Fetching
+    const [teamsPage, setTeamsPage] = React.useState(1);
+    const [teamsLimit, setTeamsLimit] = React.useState(10);
+    const { data: teamsData, isLoading: loadingTeams } = useTeamsByZone({
+        zoneId: formData.zone_id,
+        page: teamsPage,
+        limit: teamsLimit
+    });
+
+    console.log(teamsData)
+
+    // Update form when campaign changes to reset zone
+    React.useEffect(() => {
+        setFormData(prev => ({ ...prev, zone_id: "" }));
+    }, [formData.campaign_id]);
+
+    // Filter campaigns for dropdown
+    const filteredCampaigns = React.useMemo(() => {
+        if (!campaignsData?.campaigns) return [];
+        if (!campaignSearch) return campaignsData.campaigns;
+        return campaignsData.campaigns.filter(c =>
+            c.name.toLowerCase().includes(campaignSearch.toLowerCase())
+        );
+    }, [campaignsData, campaignSearch]);
+
+    // Filter zones for dropdown
+    const filteredZones = React.useMemo(() => {
+        if (!zonesData?.zones) return [];
+        if (!zoneSearch) return zonesData.zones;
+        return zonesData.zones.filter((z: any) =>
+            z.name.toLowerCase().includes(zoneSearch.toLowerCase())
+        );
+    }, [zonesData, zoneSearch]);
+
+
+    const { data: allMembers } = useTeamMembers();
+    const createTeamMutation = useCreateTeam();
+
+
+
+    const selectedCampaignName = campaignsData?.campaigns?.find(c => c._id === formData.campaign_id)?.name;
+    const selectedZoneName = zonesData?.zones?.find((z: any) => z._id === formData.zone_id)?.name;
+
     const [errors, setErrors] = React.useState({
         name: false,
         campaign_id: false,
@@ -180,13 +216,7 @@ export function Teams() {
         team_lead_id: false,
     });
 
-    // Update form when campaign changes to reset zone
-    React.useEffect(() => {
-        if (formData.campaign_id !== selectedCampaignId) {
-            setSelectedCampaignId(formData.campaign_id);
-            setFormData(prev => ({ ...prev, zone_id: "" }));
-        }
-    }, [formData.campaign_id, selectedCampaignId]);
+
 
     // Add Member form states - Updated to match API payload
     const [newMember, setNewMember] = React.useState({
@@ -320,17 +350,7 @@ export function Teams() {
         });
     };
 
-    // Filter data based on search
-    const filteredData = React.useMemo(() => {
-        if (!searchQuery) return TEAMS_DATA;
-        const query = searchQuery.toLowerCase();
-        return TEAMS_DATA.filter(
-            (team) =>
-                team.id.toLowerCase().includes(query) ||
-                team.teamLead.toLowerCase().includes(query) ||
-                team.activeCampaign.toLowerCase().includes(query)
-        );
-    }, [searchQuery]);
+
 
     // Map team members data for DataTable
     const tableMembersData = React.useMemo(() => {
@@ -355,25 +375,7 @@ export function Teams() {
         { accessorKey: "code", header: "Code" },
     ];
 
-    const table = useReactTable({
-        data: filteredData,
-        columns,
-        state: {
-            pagination: { pageIndex, pageSize },
-            columnVisibility,
-        },
-        onPaginationChange: (updater) => {
-            if (typeof updater === "function") {
-                const newPagination = updater({ pageIndex, pageSize });
-                setPageIndex(newPagination.pageIndex);
-            }
-        },
-        onColumnVisibilityChange: setColumnVisibility,
-        getCoreRowModel: getCoreRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
-    });
 
-    const totalPages = table.getPageCount();
 
     // Helper to get member name
     const getMemberName = (id: string) => {
@@ -413,152 +415,19 @@ export function Teams() {
                 {/* Table */}
                 <Card className="w-full bg-white shadow-sm rounded-lg border border-gray-100 flex-1">
                     <CardContent className="overflow-x-auto p-0">
-                        {loadingMembers ? (
-                            <div className="flex justify-center items-center py-20">
-                                <Loader2 className="animate-spin text-green-600" size={32} />
-                            </div>
-                        ) : (
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-50 border-b border-gray-100">
-                                    {table.getHeaderGroups().map((headerGroup) => (
-                                        <tr key={headerGroup.id}>
-                                            {headerGroup.headers.map((header) => (
-                                                <th
-                                                    key={header.id}
-                                                    className="text-left px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap"
-                                                >
-                                                    {header.isPlaceholder
-                                                        ? null
-                                                        : flexRender(header.column.columnDef.header, header.getContext())}
-                                                </th>
-                                            ))}
-                                            <th className="w-12">
-                                                <div className="flex justify-end px-4">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                                <Settings className="h-4 w-4 text-gray-500" />
-                                                                <span className="sr-only">Toggle columns</span>
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="w-56">
-                                                            <DropdownMenuLabel className="flex items-center justify-between">
-                                                                <span>Visible Columns</span>
-                                                                <ChevronDown className="h-4 w-4 opacity-50" />
-                                                            </DropdownMenuLabel>
-                                                            <DropdownMenuSeparator />
-                                                            <div className="py-1">
-                                                                {table.getAllColumns().map((column) => {
-                                                                    if (!column.getCanHide()) return null;
-                                                                    const header = String(column.columnDef.header ?? column.id);
-                                                                    const isVisible = column.getIsVisible();
-
-                                                                    return (
-                                                                        <div
-                                                                            key={column.id}
-                                                                            className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                                                            onClick={() => column.toggleVisibility()}
-                                                                        >
-                                                                            <span className="text-sm font-medium capitalize">
-                                                                                {header}
-                                                                            </span>
-                                                                            <div
-                                                                                className={cn(
-                                                                                    "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                                                                                    isVisible ? "bg-green-600" : "bg-gray-300"
-                                                                                )}
-                                                                            >
-                                                                                <span
-                                                                                    className={cn(
-                                                                                        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                                                                                        isVisible ? "translate-x-4" : "translate-x-0.5"
-                                                                                    )}
-                                                                                />
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </div>
-                                            </th>
-                                        </tr>
-                                    ))}
-                                </thead>
-                                <tbody>
-                                    {table.getRowModel().rows.map((row) => (
-                                        <tr
-                                            key={row.id}
-                                            className="border-b border-gray-50 hover:bg-gray-50 transition-colors"
-                                        >
-                                            {row.getVisibleCells().map((cell) => (
-                                                <td
-                                                    key={cell.id}
-                                                    className="px-6 py-4 whitespace-nowrap"
-                                                >
-                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                                </td>
-                                            ))}
-                                            <td />
-                                        </tr>
-                                    ))}
-                                    {table.getRowModel().rows.length === 0 && (
-                                        <tr>
-                                            <td colSpan={columns.length + 1} className="text-center py-10 text-gray-500">
-                                                No teams found
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        )}
-
-                        {/* Pagination */}
-                        {totalPages > 1 && (
-                            <div className="flex justify-center py-4 border-t border-gray-100">
-                                <Pagination>
-                                    <PaginationContent>
-                                        <PaginationItem>
-                                            <PaginationPrevious
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    table.previousPage();
-                                                }}
-                                                className={cn(!table.getCanPreviousPage() && "opacity-50 cursor-not-allowed")}
-                                            />
-                                        </PaginationItem>
-
-                                        {Array.from({ length: totalPages }, (_, i) => (
-                                            <PaginationItem key={i}>
-                                                <PaginationLink
-                                                    href="#"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        table.setPageIndex(i);
-                                                    }}
-                                                    isActive={i === pageIndex}
-                                                >
-                                                    {i + 1}
-                                                </PaginationLink>
-                                            </PaginationItem>
-                                        ))}
-
-                                        <PaginationItem>
-                                            <PaginationNext
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    table.nextPage();
-                                                }}
-                                                className={cn(!table.getCanNextPage() && "opacity-50 cursor-not-allowed")}
-                                            />
-                                        </PaginationItem>
-                                    </PaginationContent>
-                                </Pagination>
-                            </div>
-                        )}
+                        <DataTable
+                            data={teamsData?.teams || []}
+                            columns={columns}
+                            isLoading={loadingTeams}
+                            pagination={{
+                                pageIndex: teamsPage - 1, // DataTable expects 0-indexed
+                                pageSize: teamsLimit
+                            }}
+                            onPaginationChange={(p) => {
+                                setTeamsPage(p.pageIndex + 1);
+                                setTeamsLimit(p.pageSize);
+                            }}
+                        />
                     </CardContent>
                 </Card>
             </div>
@@ -615,64 +484,181 @@ export function Teams() {
                     {/* Content */}
                     <div className="p-6 h-[calc(100vh-200px)] w-full mx-auto overflow-y-auto">
                         {activeTab === "details" && (
-                            <div className="space-y-6 animate-in max-w-[800px] mx-auto fade-in duration-300 slide-in-from-right-5">
+                            <div className="space-y-6 animate-in md:max-w-[800px] w-[600px] mx-auto fade-in duration-300 slide-in-from-right-5">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Campaign <span className="text-red-500">*</span>
                                     </label>
-                                    <Select
-                                        value={formData.campaign_id}
-                                        onValueChange={(value) => {
-                                            setFormData(prev => ({ ...prev, campaign_id: value }));
-                                            setErrors(prev => ({ ...prev, campaign_id: false }));
-                                        }}
-                                    >
-                                        <SelectTrigger className={cn(
-                                            "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0",
-                                            errors.campaign_id
-                                                ? "border-b-red-500 focus:border-b-red-500"
-                                                : "border-b-gray-300 focus:border-b-[#04b301]"
-                                        )}>
-                                            <SelectValue placeholder="Select Campaign" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {campaigns?.results?.map((campaign: any) => (
-                                                <SelectItem key={campaign.id} value={campaign.id}>
-                                                    {campaign.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Popover open={campaignOpen} onOpenChange={setCampaignOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={campaignOpen}
+                                                className={cn(
+                                                    "w-full justify-between rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0 hover:bg-blue-50",
+                                                    errors.campaign_id
+                                                        ? "border-b-red-500"
+                                                        : "border-b-gray-300 hover:border-b-[#04b301]"
+                                                )}
+                                            >
+                                                {selectedCampaignName || "Select Campaign"}
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="p-0">
+                                            <Command>
+                                                <CommandInput
+                                                    placeholder="Search campaign..."
+                                                    value={campaignSearch}
+                                                    onValueChange={setCampaignSearch}
+                                                />
+                                                <CommandList>
+                                                    {loadingCampaigns ? (
+                                                        <CommandEmpty>Loading...</CommandEmpty>
+                                                    ) : filteredCampaigns.length === 0 ? (
+                                                        <CommandEmpty>No campaign found.</CommandEmpty>
+                                                    ) : (
+                                                        <CommandGroup >
+                                                            {filteredCampaigns.map((campaign) => (
+                                                                <CommandItem
+                                                                    key={campaign._id}
+                                                                    value={campaign.name}
+                                                                    onSelect={() => {
+                                                                        setFormData(prev => ({ ...prev, campaign_id: campaign._id }));
+                                                                        setCampaignOpen(false);
+                                                                        setErrors(prev => ({ ...prev, campaign_id: false }));
+                                                                    }}
+                                                                >
+                                                                    <Check
+                                                                        className={cn(
+                                                                            "mr-2 h-4 w-4",
+                                                                            formData.campaign_id === campaign._id ? "opacity-100" : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    {campaign.name}
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    )}
+                                                    <div className="flex items-center justify-between p-2 border-t">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                setCampaignPage(p => Math.max(1, p - 1));
+                                                            }}
+                                                            disabled={campaignPage === 1}
+                                                        >
+                                                            Previous
+                                                        </Button>
+                                                        <span className="text-xs text-gray-500">Page {campaignPage}</span>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                setCampaignPage(p => p + 1);
+                                                            }}
+                                                            disabled={!campaignsData?.campaigns || campaignsData.campaigns.length < 10}
+                                                        >
+                                                            Next
+                                                        </Button>
+                                                    </div>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Zone <span className="text-red-500">*</span>
                                     </label>
-                                    <Select
-                                        value={formData.zone_id}
-                                        onValueChange={(value) => {
-                                            setFormData(prev => ({ ...prev, zone_id: value }));
-                                            setErrors(prev => ({ ...prev, zone_id: false }));
-                                        }}
-                                        disabled={!formData.campaign_id}
-                                    >
-                                        <SelectTrigger className={cn(
-                                            "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0",
-                                            errors.zone_id
-                                                ? "border-b-red-500 focus:border-b-red-500"
-                                                : "border-b-gray-300 focus:border-b-[#04b301]"
-                                        )}>
-                                            <SelectValue placeholder="Select Zone" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {zones?.map((zone: any) => (
-                                                <SelectItem key={zone.id} value={zone.id}>
-                                                    {zone.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Popover open={zoneOpen} onOpenChange={setZoneOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={zoneOpen}
+                                                disabled={!formData.campaign_id}
+                                                className={cn(
+                                                    "w-full justify-between rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0 hover:bg-blue-50",
+                                                    errors.zone_id
+                                                        ? "border-b-red-500"
+                                                        : "border-b-gray-300 hover:border-b-[#04b301]",
+                                                    !formData.campaign_id && "opacity-50 cursor-not-allowed bg-gray-50"
+                                                )}
+                                            >
+                                                {selectedZoneName || "Select Zone"}
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="p-0">
+                                            <Command>
+                                                <CommandInput
+                                                    placeholder="Search zone..."
+                                                    value={zoneSearch}
+                                                    onValueChange={setZoneSearch}
+                                                />
+                                                <CommandList>
+                                                    {loadingZones ? (
+                                                        <CommandEmpty>Loading zones...</CommandEmpty>
+                                                    ) : filteredZones.length === 0 ? (
+                                                        <CommandEmpty>No zone found.</CommandEmpty>
+                                                    ) : (
+                                                        <CommandGroup>
+                                                            {filteredZones.map((zone: any) => (
+                                                                <CommandItem
+                                                                    key={zone._id}
+                                                                    value={zone.name}
+                                                                    onSelect={() => {
+                                                                        setFormData(prev => ({ ...prev, zone_id: zone._id }));
+                                                                        setZoneOpen(false);
+                                                                        setErrors(prev => ({ ...prev, zone_id: false }));
+                                                                    }}
+                                                                >
+                                                                    <Check
+                                                                        className={cn(
+                                                                            "mr-2 h-4 w-4",
+                                                                            formData.zone_id === zone._id ? "opacity-100" : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    {zone.name}
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    )}
+                                                    <div className="flex items-center justify-between p-2 border-t">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                setZonePage(p => Math.max(1, p - 1));
+                                                            }}
+                                                            disabled={zonePage === 1}
+                                                        >
+                                                            Previous
+                                                        </Button>
+                                                        <span className="text-xs text-gray-500">Page {zonePage}</span>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                setZonePage(p => p + 1);
+                                                            }}
+                                                            disabled={!zonesData?.zones || zonesData.zones.length < 10}
+                                                        >
+                                                            Next
+                                                        </Button>
+                                                    </div>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
 
                                 <div>

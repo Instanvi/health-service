@@ -176,7 +176,6 @@ export default function Team() {
         firstName: u.first_name,
         lastName: u.last_name,
         email: u.email?.[0],
-        facility_type: u.facility_type,
         phone: u.phone?.[0],
         gender: u.gender,
         code: u.code
@@ -192,7 +191,6 @@ export default function Team() {
         { accessorKey: "lastName", header: "Last Name" },
         { accessorKey: "email", header: "Email" },
         { accessorKey: "phone", header: "Phone" },
-        { accessorKey: "facility_type", header: "Facility Type" },
         { accessorKey: "gender", header: "Gender" },
         { accessorKey: "code", header: "Code" },
     ];
