@@ -3,7 +3,7 @@
 import * as React from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Search, Plus, PauseCircle, CheckCircle, XCircle, PlayCircle, CalendarIcon } from "lucide-react";
+import { Loader2, Search, Plus, PauseCircle, CheckCircle, XCircle, PlayCircle, CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,14 @@ import {
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 import { useCreateCampaign } from "./hooks";
 import { useCampaigns, Campaign } from "./hooks/useCampaigns";
 import { useTeamMembers } from "../team/hooks/useTeamMembers";
@@ -70,8 +78,8 @@ const columns: ColumnDef<Campaign>[] = [
         header: "Campaign Manager",
         cell: ({ row }) => {
             const manager = row.original.manager;
-            const managerName = manager 
-                ? `${manager.first_name} ${manager.last_name}` 
+            const managerName = manager
+                ? `${manager.first_name} ${manager.last_name}`
                 : "N/A";
             return <span className="text-gray-700">{managerName}</span>;
         },
@@ -120,8 +128,12 @@ export function Campaigns() {
     const [activeTab, setActiveTab] = React.useState<"details" | "members">("details");
 
     // Fetch hooks
-    const { data: teamMembers } = useTeamMembers();
+    const { data: teamMembers, isLoading: loadingMembers } = useTeamMembers();
     const createCampaignMutation = useCreateCampaign();
+
+    // Manager Dropdown State with search
+    const [managerOpen, setManagerOpen] = React.useState(false);
+    const [managerSearch, setManagerSearch] = React.useState("");
 
     // Form states
     const [formData, setFormData] = React.useState({
@@ -138,6 +150,20 @@ export function Campaigns() {
         start_date: false,
         end_date: false,
     });
+
+    // Filter managers for dropdown
+    const filteredManagers = React.useMemo(() => {
+        if (!teamMembers) return [];
+        if (!managerSearch) return teamMembers;
+        return teamMembers.filter((m: any) =>
+            `${m.first_name} ${m.last_name} ${m.username}`.toLowerCase().includes(managerSearch.toLowerCase())
+        );
+    }, [teamMembers, managerSearch]);
+
+    // Get selected manager name
+    const selectedManager = React.useMemo(() => {
+        return teamMembers?.find((m: any) => m._id === formData.manager_personality_id);
+    }, [teamMembers, formData.manager_personality_id]);
 
     // Members tab states
     const [selectedZone, setSelectedZone] = React.useState("");
@@ -332,29 +358,69 @@ export function Campaigns() {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Campaign Manager <span className="text-red-500">*</span>
                                     </label>
-                                    <Select
-                                        value={formData.manager_personality_id}
-                                        onValueChange={(value) => {
-                                            setFormData(prev => ({ ...prev, manager_personality_id: value }));
-                                            setErrors(prev => ({ ...prev, manager_personality_id: false }));
-                                        }}
-                                    >
-                                        <SelectTrigger className={cn(
-                                            "rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0",
-                                            errors.manager_personality_id
-                                                ? "border-b-red-500 focus:border-b-red-500"
-                                                : "border-b-gray-300 focus:border-b-[#04b301]"
-                                        )}>
-                                            <SelectValue placeholder="Select Manager" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {teamMembers?.map((member: any) => (
-                                                <SelectItem key={member._id} value={member._id}>
-                                                    {member.first_name} {member.last_name} ({member.username})
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Popover open={managerOpen} onOpenChange={setManagerOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={managerOpen}
+                                                className={cn(
+                                                    "w-full justify-between rounded-none shadow-none py-6 px-5 border-b-2 border-x-0 border-t-0 bg-blue-50 focus:ring-0 hover:bg-blue-50",
+                                                    errors.manager_personality_id
+                                                        ? "border-b-red-500 focus:border-b-red-500"
+                                                        : "border-b-gray-300 focus:border-b-[#04b301]"
+                                                )}
+                                            >
+                                                {selectedManager
+                                                    ? `${selectedManager.first_name} ${selectedManager.last_name}`
+                                                    : "Select Manager..."}
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[400px] p-0" align="start">
+                                            <Command>
+                                                <CommandInput
+                                                    placeholder="Search managers..."
+                                                    value={managerSearch}
+                                                    onValueChange={setManagerSearch}
+                                                />
+                                                <CommandList className="max-h-[300px]">
+                                                    <CommandEmpty>
+                                                        {loadingMembers ? (
+                                                            <div className="flex items-center justify-center py-4">
+                                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                                Loading...
+                                                            </div>
+                                                        ) : "No managers found."}
+                                                    </CommandEmpty>
+                                                    <CommandGroup>
+                                                        {filteredManagers.map((member: any) => (
+                                                            <CommandItem
+                                                                key={member._id}
+                                                                value={member._id}
+                                                                onSelect={() => {
+                                                                    setFormData(prev => ({ ...prev, manager_personality_id: member._id }));
+                                                                    setErrors(prev => ({ ...prev, manager_personality_id: false }));
+                                                                    setManagerOpen(false);
+                                                                }}
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        formData.manager_personality_id === member._id ? "opacity-100" : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                <div className="flex flex-col">
+                                                                    <span>{member.first_name} {member.last_name}</span>
+                                                                    <span className="text-xs text-gray-400">{member.username}</span>
+                                                                </div>
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">

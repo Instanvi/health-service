@@ -1,5 +1,6 @@
 "use client";
 
+import { CreateUserPayload } from "@/components/team/hooks/useTeamMembers";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import { toast } from "sonner";
@@ -93,6 +94,23 @@ export interface UpdateTeamPayload {
 /* ——— API FUNCTIONS ——— */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.dappahealth.eu/dappa";
+
+async function createCampaigner(payload: CreateUserPayload) {
+  const token = Cookies.get("authToken");
+
+  const res = await fetch(`${API_BASE}/auth/create-campaigner`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Failed to create user");
+  return data;
+}
 
 async function fetchTeamsByCampaign(campaignId: string, campaignCode?: string): Promise<Team[]> {
     const token = Cookies.get("authToken");
@@ -298,4 +316,24 @@ export function useUpdateTeam() {
             toast.error(err.message || "Failed to update team");
         },
     });
+}
+
+
+export function useCreateCampaigner() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createCampaigner,
+    onSuccess: () => {
+      toast.success("User created successfully!");
+
+      // refresh list
+      queryClient.invalidateQueries({
+        queryKey: ["team-members"],
+      });
+    },
+    onError: (err: any) => {
+      toast.error(err.message);
+    },
+  });
 }

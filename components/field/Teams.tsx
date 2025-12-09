@@ -6,31 +6,15 @@ import {
     ColumnDef,
 } from "@tanstack/react-table";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronDown, Loader2, Settings, Search, Plus, X, Eye, EyeOff, Link2, Check, ChevronsUpDown } from "lucide-react";
+import { Search, Plus, Check, ChevronsUpDown } from "lucide-react";
 import { DataTable } from "../PatientsTable";
 import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import {
     useTeamMembers,
-    useCreateTeamMember,
     CreateUserPayload,
 } from "../team/hooks/useTeamMembers";
-import { useCampaigns, useZonesByCampaign, useCreateTeam, useTeamsByFacility, Team } from "./hooks";
+import { useCampaigns, useZonesByCampaign, useTeamsByFacility, Team, useCreateCampaigner, useCreateTeam } from "./hooks";
 import { toast } from "sonner";
-import {
-    Pagination,
-    PaginationContent,
-    PaginationItem,
-    PaginationLink,
-    PaginationNext,
-    PaginationPrevious,
-} from "@/components/ui/pagination";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
     Sheet,
     SheetContent,
@@ -172,7 +156,7 @@ export function Teams() {
 
     // Fetch team members using the hook
     const { data: teamMembers, isLoading: loadingMembers } = useTeamMembers();
-    const createMemberMutation = useCreateTeamMember();
+    const createMemberMutation = useCreateCampaigner();
 
     // Sheet states
     const [isSheetOpen, setIsSheetOpen] = React.useState(false);
