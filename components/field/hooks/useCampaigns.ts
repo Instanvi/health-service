@@ -6,14 +6,33 @@ import { toast } from "sonner";
 
 /* ——— TYPES ——— */
 
+export interface CampaignManager {
+    _id: string;
+    first_name: string;
+    last_name: string;
+    gender?: string;
+    code?: string;
+    email?: string[];
+    phone?: string[];
+}
+
 export interface Campaign {
     _id: string;
     name: string;
     description: string;
+    code: string;
     manager_personality_id: string;
     start_date: string;
     end_date: string;
-    status: "active" | "inactive" | "completed" | "draft"; // Assuming status values
+    status: "active" | "inactive" | "completed" | "draft";
+    metadata?: {
+        created_at: string;
+        created_by: string;
+        modified_at: string;
+        modified_by: string;
+        facility_id: string;
+    };
+    manager?: CampaignManager;
     created_at?: string;
     updated_at?: string;
 }

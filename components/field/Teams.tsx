@@ -14,7 +14,7 @@ import {
     useCreateTeamMember,
     CreateUserPayload,
 } from "../team/hooks/useTeamMembers";
-import { useCampaigns, useZonesByCampaign, useCreateTeam, useTeamsByZone, Team } from "./hooks";
+import { useCampaigns, useZonesByCampaign, useCreateTeam, useTeamsByFacility, Team } from "./hooks";
 import { toast } from "sonner";
 import {
     Pagination,
@@ -76,36 +76,80 @@ function StatusBadge({ status }: { status: "live" | "inactive" }) {
 }
 
 // Column definitions
-// Column definitions
 const columns: ColumnDef<Team>[] = [
-    {
-        accessorKey: "_id",
-        header: "ID",
-        cell: ({ row }) => <span className="text-gray-700">{row.original._id?.substring(0, 8)}...</span>,
-    },
     {
         accessorKey: "name",
         header: "Team Name",
-        cell: ({ row }) => <span className="text-gray-700">{row.getValue("name")}</span>,
+        cell: ({ row }) => <span className="font-medium text-gray-900">{row.getValue("name")}</span>,
     },
     {
-        accessorKey: "code",
-        header: "Code",
-        cell: ({ row }) => <span className="text-gray-700">{row.getValue("code")}</span>,
+        accessorKey: "team_lead",
+        header: "Team Lead",
+        cell: ({ row }) => {
+            const teamLead = row.original.team_lead;
+            if (!teamLead) return <span className="text-gray-400">—</span>;
+            return (
+                <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-medium text-sm">
+                        {teamLead.first_name?.[0]}{teamLead.last_name?.[0]}
+                    </div>
+                    <span className="text-gray-700">{teamLead.first_name} {teamLead.last_name}</span>
+                </div>
+            );
+        },
     },
     {
         accessorKey: "members",
         header: "Members",
-        cell: ({ row }) => (
-            <span className="text-gray-700">
-                {String((row.getValue("members") as any[])?.length || 0).padStart(2, "0")}
-            </span>
-        ),
+        cell: ({ row }) => {
+            const members = row.getValue("members") as string[] | undefined;
+            const count = members?.length || 0;
+            return (
+                <div className="flex items-center gap-2">
+                    <div className="flex -space-x-2">
+                        {[...Array(Math.min(count, 3))].map((_, i) => (
+                            <div
+                                key={i}
+                                className="h-7 w-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs text-gray-600"
+                            >
+                                {i + 1}
+                            </div>
+                        ))}
+                    </div>
+                    <span className="text-sm text-gray-600">
+                        {count} {count === 1 ? "member" : "members"}
+                    </span>
+                </div>
+            );
+        },
+    },
+    {
+        accessorKey: "campaign",
+        header: "Active Campaign",
+        cell: ({ row }) => {
+            const campaign = row.original.campaign;
+            if (!campaign) return <span className="text-gray-400">—</span>;
+            return (
+                <div className="flex flex-col">
+                    <span className="text-gray-700 font-medium">{campaign.name}</span>
+                    <span className="text-xs text-gray-500">{campaign.code}</span>
+                </div>
+            );
+        },
     },
     {
         accessorKey: "status",
         header: "Status",
-        cell: ({ row }) => <StatusBadge status="live" />, // Placeholder as status is not in API yet
+        cell: ({ row }) => {
+            const campaign = row.original.campaign;
+            const isActive = campaign?.status === "active";
+            return (
+                <div className={`flex items-center gap-1.5 ${isActive ? "text-green-600" : "text-gray-400"}`}>
+                    <div className={`h-2 w-2 rounded-full ${isActive ? "bg-green-600" : "bg-gray-400"}`}></div>
+                    <span className="text-sm font-medium">{isActive ? "Active" : "Inactive"}</span>
+                </div>
+            );
+        },
     },
 ];
 
@@ -168,13 +212,12 @@ export function Teams() {
     // Teams Fetching
     const [teamsPage, setTeamsPage] = React.useState(1);
     const [teamsLimit, setTeamsLimit] = React.useState(10);
-    const { data: teamsData, isLoading: loadingTeams } = useTeamsByZone({
-        zoneId: formData.zone_id,
+    const { data: teamsData, isLoading: loadingTeams } = useTeamsByFacility({
         page: teamsPage,
-        limit: teamsLimit
+        pageSize: teamsLimit
     });
 
-    console.log(teamsData)
+    console.log("Facility Teams:", teamsData);
 
     // Update form when campaign changes to reset zone
     React.useEffect(() => {

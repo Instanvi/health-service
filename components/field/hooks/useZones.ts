@@ -40,6 +40,54 @@ export interface ZonesResponse {
     results: Zone[];
 }
 
+/* ——— FACILITY ZONES TYPES ——— */
+
+export interface FacilityZoneCampaign {
+    _id: string;
+    name: string;
+    code: string;
+    status: string;
+}
+
+export interface FacilityZoneMetadata {
+    created_at: string;
+    created_by: string;
+    modified_at: string;
+    modified_by: string;
+    facility_id: string;
+}
+
+export interface FacilityZone {
+    _id: string;
+    campaign_id: string;
+    name: string;
+    description: string;
+    code: string;
+    boundaries: GeoJSONPolygon;
+    metadata: FacilityZoneMetadata;
+    campaign: FacilityZoneCampaign;
+    team_count: number;
+}
+
+export interface FacilityZonesPagination {
+    current_page: number;
+    page_size: number;
+    total_items: number;
+    total_pages: number;
+    has_next: boolean;
+    has_previous: boolean;
+}
+
+export interface FacilityZonesResponse {
+    message: string;
+    zones: FacilityZone[];
+    pagination: FacilityZonesPagination;
+    filters: {
+        facility_id: string;
+        campaign_id: string | null;
+    };
+}
+
 /* ——— API FUNCTIONS ——— */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.dappahealth.eu/dappa";
@@ -114,6 +162,30 @@ async function updateZone({ id, payload }: { id: string; payload: UpdateZonePayl
     return data;
 }
 
+async function fetchZonesByFacility(options: { page?: number; pageSize?: number; campaignId?: string }): Promise<FacilityZonesResponse> {
+    const { page = 1, pageSize = 20, campaignId } = options;
+    const token = Cookies.get("authToken");
+
+    const queryParams = new URLSearchParams();
+    queryParams.append("page", page.toString());
+    queryParams.append("page_size", pageSize.toString());
+    if (campaignId) queryParams.append("campaign_id", campaignId);
+
+    const res = await fetch(`${API_BASE}/zone/facility?${queryParams.toString()}`, {
+        headers: {
+            accept: "application/json",
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Failed to fetch zones" }));
+        throw new Error(error.message || "Failed to load zones");
+    }
+
+    return res.json();
+}
+
 /* ——— HOOKS ——— */
 
 export function useZonesByCampaign(options: { campaignId: string; campaignCode?: string; page?: number; limit?: number } | string) {
@@ -157,5 +229,13 @@ export function useUpdateZone() {
         onError: (err: any) => {
             toast.error(err.message || "Failed to update zone");
         },
+    });
+}
+
+export function useZonesByFacility(options: { page?: number; pageSize?: number; campaignId?: string } = {}) {
+    return useQuery({
+        queryKey: ["zones", "facility", options.page, options.pageSize, options.campaignId],
+        queryFn: () => fetchZonesByFacility(options),
+        staleTime: 5 * 60 * 1000, // 5 minutes
     });
 }

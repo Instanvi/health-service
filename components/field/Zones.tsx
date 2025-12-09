@@ -1,31 +1,9 @@
 "use client";
 
 import * as React from "react";
-import {
-    useReactTable,
-    getCoreRowModel,
-    getPaginationRowModel,
-    flexRender,
-    ColumnDef,
-    VisibilityState,
-} from "@tanstack/react-table";
+import { ColumnDef } from "@tanstack/react-table";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronDown, Loader2, Settings, Search, Plus, MapPin, Check, ChevronsUpDown, Trash2 } from "lucide-react";
-import {
-    Pagination,
-    PaginationContent,
-    PaginationItem,
-    PaginationLink,
-    PaginationNext,
-    PaginationPrevious,
-} from "@/components/ui/pagination";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Loader2, Search, Plus, MapPin, Check, ChevronsUpDown, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,29 +28,10 @@ import {
 } from "@/components/ui/popover";
 import { GoogleMap, Polygon, Marker } from "@react-google-maps/api";
 import { useGoogleMaps } from "@/lib/GoogleMapsProvider";
-import { useCreateZone } from "./hooks/useZones";
+import { useCreateZone, useZonesByFacility, FacilityZone } from "./hooks/useZones";
 import { useCampaigns } from "./hooks/useCampaigns";
 import { toast } from "sonner";
-
-// Types
-interface Zone {
-    id: number;
-    teamLead: string;
-    members: number;
-    activeCampaign: string;
-    location: string;
-}
-
-// Sample data matching the screenshot
-const ZONES_DATA: Zone[] = [
-    { id: 1, teamLead: "Theresia Mbah", members: 3, activeCampaign: "Polio 2024", location: "Grand hanga" },
-    { id: 2, teamLead: "Peters Nze", members: 3, activeCampaign: "Polio 2024", location: "Grand hanga" },
-    { id: 2, teamLead: "Ayissi Bi Paul", members: 2, activeCampaign: "VIT A 2025", location: "Grand hanga" },
-    { id: 2, teamLead: "Ebeneza Ndoki", members: 2, activeCampaign: "VIT A 2025", location: "Grand hanga" },
-    { id: 1, teamLead: "Pierre Kwemo", members: 3, activeCampaign: "VIT A 2025", location: "Grand hanga" },
-    { id: 2, teamLead: "Chalefac Theodore", members: 3, activeCampaign: "VIT A 2025", location: "Grand hanga" },
-    { id: 1, teamLead: "Kuma  Theodore", members: 3, activeCampaign: "VIT A 2025", location: "Grand hanga" },
-];
+import { DataTable } from "@/components/PatientsTable";
 
 // Location badge component
 function LocationBadge({ location }: { location: string }) {
@@ -84,36 +43,42 @@ function LocationBadge({ location }: { location: string }) {
     );
 }
 
-// Column definitions
-const columns: ColumnDef<Zone>[] = [
+// Column definitions for FacilityZone
+const columns: ColumnDef<FacilityZone>[] = [
     {
-        accessorKey: "id",
-        header: "ID",
-        cell: ({ row }) => <span className="text-gray-700">{row.getValue("id")}</span>,
+        accessorKey: "name",
+        header: "Zone Name",
+        cell: ({ row }) => <span className="text-gray-700 font-medium">{row.getValue("name")}</span>,
     },
     {
-        accessorKey: "teamLead",
-        header: "Team Lead",
-        cell: ({ row }) => <span className="text-gray-700">{row.getValue("teamLead")}</span>,
-    },
-    {
-        accessorKey: "members",
-        header: "Members",
+        accessorKey: "team_count",
+        header: "Team Count",
         cell: ({ row }) => (
             <span className="text-gray-700">
-                {String(row.getValue("members")).padStart(2, "0")}
+                {String(row.getValue("team_count") ?? 0).padStart(2, "0")}
             </span>
         ),
     },
     {
-        accessorKey: "activeCampaign",
+        accessorKey: "campaign",
         header: "Active Campaign",
-        cell: ({ row }) => <span className="text-gray-700">{row.getValue("activeCampaign")}</span>,
+        cell: ({ row }) => {
+            const campaign = row.original.campaign;
+            return <span className="text-gray-700">{campaign?.name ?? "N/A"}</span>;
+        },
     },
     {
-        accessorKey: "location",
+        accessorKey: "code",
+        header: "Zone Code",
+        cell: ({ row }) => <span className="text-gray-700">{row.getValue("code") || "N/A"}</span>,
+    },
+    {
+        accessorKey: "description",
         header: "Location",
-        cell: ({ row }) => <LocationBadge location={row.getValue("location")} />,
+        cell: ({ row }) => {
+            const description = row.getValue("description") as string;
+            return <LocationBadge location={description || "N/A"} />;
+        },
     },
 ];
 
@@ -122,11 +87,14 @@ const defaultCenter = { lat: 4.0511, lng: 9.7679 }; // Douala
 
 export function Zones() {
     const [searchQuery, setSearchQuery] = React.useState("");
-    const [isLoading] = React.useState(false);
-    const [pageIndex, setPageIndex] = React.useState(0);
-    const pageSize = 10;
 
-    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+    // Zones Fetching with pagination
+    const [zonesPage, setZonesPage] = React.useState(1);
+    const [zonesLimit, setZonesLimit] = React.useState(10);
+    const { data: zonesData, isLoading: loadingZones } = useZonesByFacility({
+        page: zonesPage,
+        pageSize: zonesLimit
+    });
 
     // Slide-in panel states
     const [isPanelOpen, setIsPanelOpen] = React.useState(false);
@@ -218,38 +186,6 @@ export function Zones() {
         });
     };
 
-    // Filter data based on search
-    const filteredData = React.useMemo(() => {
-        if (!searchQuery) return ZONES_DATA;
-        const query = searchQuery.toLowerCase();
-        return ZONES_DATA.filter(
-            (zone) =>
-                zone.teamLead.toLowerCase().includes(query) ||
-                zone.activeCampaign.toLowerCase().includes(query) ||
-                zone.location.toLowerCase().includes(query)
-        );
-    }, [searchQuery]);
-
-    const table = useReactTable({
-        data: filteredData,
-        columns,
-        state: {
-            pagination: { pageIndex, pageSize },
-            columnVisibility,
-        },
-        onPaginationChange: (updater) => {
-            if (typeof updater === "function") {
-                const newPagination = updater({ pageIndex, pageSize });
-                setPageIndex(newPagination.pageIndex);
-            }
-        },
-        onColumnVisibilityChange: setColumnVisibility,
-        getCoreRowModel: getCoreRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
-    });
-
-    const totalPages = table.getPageCount();
-
     // Filter campaigns for dropdown
     const filteredCampaigns = React.useMemo(() => {
         if (!campaignsData?.campaigns) return [];
@@ -293,151 +229,23 @@ export function Zones() {
                 {/* Table */}
                 <Card className="w-full bg-white shadow-sm rounded-lg border border-gray-100 flex-1">
                     <CardContent className="overflow-x-auto p-0">
-                        {isLoading ? (
+                        {loadingZones ? (
                             <div className="flex justify-center items-center py-20">
                                 <Loader2 className="animate-spin text-green-600" size={32} />
                             </div>
                         ) : (
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-50 border-b border-gray-100">
-                                    {table.getHeaderGroups().map((headerGroup) => (
-                                        <tr key={headerGroup.id}>
-                                            {headerGroup.headers.map((header) => (
-                                                <th
-                                                    key={header.id}
-                                                    className="text-left px-6 py-4 text-sm font-medium text-gray-600 whitespace-nowrap"
-                                                >
-                                                    {header.isPlaceholder
-                                                        ? null
-                                                        : flexRender(header.column.columnDef.header, header.getContext())}
-                                                </th>
-                                            ))}
-                                            <th className="w-12">
-                                                <div className="flex justify-end px-4">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                                <Settings className="h-4 w-4 text-gray-500" />
-                                                                <span className="sr-only">Toggle columns</span>
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="w-56">
-                                                            <DropdownMenuLabel className="flex items-center justify-between">
-                                                                <span>Visible Columns</span>
-                                                                <ChevronDown className="h-4 w-4 opacity-50" />
-                                                            </DropdownMenuLabel>
-                                                            <DropdownMenuSeparator />
-                                                            <div className="py-1">
-                                                                {table.getAllColumns().map((column) => {
-                                                                    if (!column.getCanHide()) return null;
-                                                                    const header = String(column.columnDef.header ?? column.id);
-                                                                    const isVisible = column.getIsVisible();
-
-                                                                    return (
-                                                                        <div
-                                                                            key={column.id}
-                                                                            className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                                                            onClick={() => column.toggleVisibility()}
-                                                                        >
-                                                                            <span className="text-sm font-medium capitalize">
-                                                                                {header}
-                                                                            </span>
-                                                                            <div
-                                                                                className={cn(
-                                                                                    "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                                                                                    isVisible ? "bg-green-600" : "bg-gray-300"
-                                                                                )}
-                                                                            >
-                                                                                <span
-                                                                                    className={cn(
-                                                                                        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                                                                                        isVisible ? "translate-x-4" : "translate-x-0.5"
-                                                                                    )}
-                                                                                />
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </div>
-                                            </th>
-                                        </tr>
-                                    ))}
-                                </thead>
-                                <tbody>
-                                    {table.getRowModel().rows.map((row) => (
-                                        <tr
-                                            key={row.id}
-                                            className="border-b border-gray-50 hover:bg-gray-50 transition-colors"
-                                        >
-                                            {row.getVisibleCells().map((cell) => (
-                                                <td
-                                                    key={cell.id}
-                                                    className="px-6 py-4 whitespace-nowrap"
-                                                >
-                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                                </td>
-                                            ))}
-                                            <td />
-                                        </tr>
-                                    ))}
-                                    {table.getRowModel().rows.length === 0 && (
-                                        <tr>
-                                            <td colSpan={columns.length + 1} className="text-center py-10 text-gray-500">
-                                                No zones found
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        )}
-
-                        {/* Pagination */}
-                        {totalPages > 1 && (
-                            <div className="flex justify-center py-4 border-t border-gray-100">
-                                <Pagination>
-                                    <PaginationContent>
-                                        <PaginationItem>
-                                            <PaginationPrevious
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    table.previousPage();
-                                                }}
-                                                className={cn(!table.getCanPreviousPage() && "opacity-50 cursor-not-allowed")}
-                                            />
-                                        </PaginationItem>
-
-                                        {Array.from({ length: totalPages }, (_, i) => (
-                                            <PaginationItem key={i}>
-                                                <PaginationLink
-                                                    href="#"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        table.setPageIndex(i);
-                                                    }}
-                                                    isActive={i === pageIndex}
-                                                >
-                                                    {i + 1}
-                                                </PaginationLink>
-                                            </PaginationItem>
-                                        ))}
-
-                                        <PaginationItem>
-                                            <PaginationNext
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    table.nextPage();
-                                                }}
-                                                className={cn(!table.getCanNextPage() && "opacity-50 cursor-not-allowed")}
-                                            />
-                                        </PaginationItem>
-                                    </PaginationContent>
-                                </Pagination>
-                            </div>
+                            <DataTable
+                                data={zonesData?.zones ?? []}
+                                columns={columns}
+                                pagination={{
+                                    pageIndex: zonesPage - 1,
+                                    pageSize: zonesLimit,
+                                }}
+                                onPaginationChange={(pagination) => {
+                                    setZonesPage(pagination.pageIndex + 1);
+                                    setZonesLimit(pagination.pageSize);
+                                }}
+                            />
                         )}
                     </CardContent>
                 </Card>

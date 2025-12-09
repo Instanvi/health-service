@@ -6,15 +6,62 @@ import { toast } from "sonner";
 
 /* ——— TYPES ——— */
 
+export interface TeamCampaign {
+    _id: string;
+    name: string;
+    code: string;
+    status: string;
+}
+
+export interface TeamZone {
+    _id: string;
+    name: string;
+    code: string;
+}
+
+export interface TeamLead {
+    _id: string;
+    first_name: string;
+    last_name: string;
+    code: string;
+}
+
+export interface TeamMetadata {
+    created_at: string;
+    created_by: string;
+    modified_at: string;
+    modified_by: string;
+    facility_id: string;
+}
+
 export interface Team {
     _id: string;
     name: string;
     campaign_id: string;
     zone_id: string;
     team_lead_id: string;
+    code?: string;
     members: string[]; // Array of member IDs
+    metadata?: TeamMetadata;
+    campaign?: TeamCampaign;
+    zone?: TeamZone;
+    team_lead?: TeamLead;
     created_at?: string;
     updated_at?: string;
+}
+
+export interface FacilityTeamsResponse {
+    message: string;
+    facility_id: string;
+    teams: Team[];
+    pagination: {
+        current_page: number;
+        page_size: number;
+        total_items: number;
+        total_pages: number;
+        has_next: boolean;
+        has_previous: boolean;
+    };
 }
 
 export interface TeamMember {
@@ -101,6 +148,30 @@ async function fetchTeamsByZone(options: { zoneId: string; zoneCode?: string; pa
     };
 }
 
+async function fetchTeamsByFacility(options: { page?: number; pageSize?: number }): Promise<FacilityTeamsResponse> {
+    const { page = 1, pageSize = 10 } = options;
+    const token = Cookies.get("authToken");
+
+    const queryParams = new URLSearchParams();
+    queryParams.append("page", page.toString());
+    queryParams.append("page_size", pageSize.toString());
+
+    const res = await fetch(`${API_BASE}/team/facility?${queryParams.toString()}`, {
+        headers: {
+            accept: "application/json",
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Failed to fetch facility teams" }));
+        throw new Error(error.message || "Failed to load facility teams");
+    }
+
+    const data: FacilityTeamsResponse = await res.json();
+    return data;
+}
+
 async function fetchTeamMembers(teamId: string, teamCode?: string): Promise<TeamMember[]> {
     const token = Cookies.get("authToken");
     if (!teamId) return [];
@@ -178,6 +249,14 @@ export function useTeamsByZone(options: { zoneId: string; zoneCode?: string; pag
         queryKey: ["teams", "zone", options.zoneId, options.zoneCode, options.page, options.limit],
         queryFn: () => fetchTeamsByZone(options),
         enabled: !!options.zoneId,
+        staleTime: 5 * 60 * 1000,
+    });
+}
+
+export function useTeamsByFacility(options: { page?: number; pageSize?: number } = {}) {
+    return useQuery({
+        queryKey: ["teams", "facility", options.page, options.pageSize],
+        queryFn: () => fetchTeamsByFacility(options),
         staleTime: 5 * 60 * 1000,
     });
 }
