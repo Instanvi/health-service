@@ -124,39 +124,39 @@ const AppSidebar: FC<AppSidebarProps> = ({ navItems, userName, email, role }) =>
 
           {/* User Profile & Sign Out */}
           <div className="border-t border-green-600 p-2 space-y-2">
-            {/* Settings Button (if applicable) */}
-            {navItems.find(item => item.id === 'settings') && facilityType !== 'health_center' && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link
-                    href="/settings"
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 w-full",
-                      isActiveProfile
-                        ? "bg-[#FFFFFF33] text-[#55FF18]"
-                        : "text-green-100 hover:bg-[#FFFFFF33]",
-                      !isExpanded && "justify-center"
-                    )}
-                  >
-                    <User className="w-5 h-5 flex-shrink-0" />
-                    {isExpanded && (
-                      <div className="flex flex-col items-start text-left overflow-hidden">
-                        <span className="text-sm font-semibold truncate w-full">{userName || "User"}</span>
-                        <span className="text-xs text-green-200 truncate w-full">{email}</span>
-                      </div>
-                    )}
-                  </Link>
-                </TooltipTrigger>
-                {!isExpanded && (
-                  <TooltipContent side="right" className="bg-gray-900 text-white rounded-md px-3 py-1.5 text-sm">
-                    <div className="flex flex-col">
-                      <span className="font-semibold">{userName || "User"}</span>
-                      <span className="text-xs text-gray-300">{email}</span>
+            {/* User Profile */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/settings"
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 w-full",
+                    isActiveProfile
+                      ? "bg-[#FFFFFF33] text-[#55FF18]"
+                      : "text-green-100 hover:bg-[#FFFFFF33]",
+                    !isExpanded && "justify-center"
+                  )}
+                >
+                  <User className="w-5 h-5 flex-shrink-0" />
+                  {isExpanded && (
+                    <div className="flex flex-col items-start text-left overflow-hidden">
+                      <span className="text-sm font-semibold truncate w-full">{userName || "User"}</span>
+                      <span className="text-xs text-green-200 truncate w-full">{email}</span>
                     </div>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            )}
+                  )}
+                </Link>
+              </TooltipTrigger>
+              {!isExpanded && (
+                <TooltipContent side="right" className="bg-gray-900 text-white rounded-md px-3 py-1.5 text-sm">
+                  <Link href="/settings">
+                  <div className="flex flex-col">
+                    <span className="font-semibold">{userName || "User"}</span>
+                    <span className="text-xs text-gray-300">{email}</span>
+                  </div>
+                  </Link>
+                </TooltipContent>
+              )}
+            </Tooltip>
 
             {/* Sign Out Button */}
             <Tooltip>
