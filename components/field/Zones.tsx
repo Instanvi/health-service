@@ -32,6 +32,7 @@ import { useCreateZone, useZonesByFacility, FacilityZone, GeoJSONPolygon } from 
 import { useCampaigns } from "./hooks/useCampaigns";
 import { toast } from "sonner";
 import { DataTable } from "@/components/PatientsTable";
+import { SelectionSheet } from "@/components/ui/selection-sheet";
 
 // Cache for reverse geocoded location names
 const locationCache = new Map<string, string>();
@@ -601,8 +602,19 @@ export function Zones() {
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Campaign <span className="text-red-500">*</span>
                             </label>
-                            <Popover open={campaignOpen} onOpenChange={handleCampaignOpenChange}>
-                                <PopoverTrigger asChild>
+                            <SelectionSheet
+                                open={campaignOpen}
+                                onOpenChange={handleCampaignOpenChange}
+                                title="Select Campaign"
+                                searchPlaceholder="Search campaigns..."
+                                searchValue={campaignSearch}
+                                onSearchChange={setCampaignSearch}
+                                items={filteredCampaigns}
+                                isLoading={loadingCampaigns}
+                                hasMore={hasMoreCampaigns && !campaignSearch}
+                                onLoadMore={handleLoadMoreCampaigns}
+                                isLoadingMore={fetchingCampaigns}
+                                trigger={
                                     <Button
                                         variant="outline"
                                         role="combobox"
@@ -617,84 +629,31 @@ export function Zones() {
                                         {selectedCampaign ? selectedCampaign.name : "Select campaign..."}
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[400px] p-0" align="start">
-                                    <Command>
-                                        <CommandInput
-                                            placeholder="Search campaigns..."
-                                            value={campaignSearch}
-                                            onValueChange={setCampaignSearch}
-                                        />
-                                        <CommandList className="max-h-[300px]">
-                                            <CommandEmpty>
-                                                {loadingCampaigns ? (
-                                                    <div className="flex items-center justify-center py-4">
-                                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                        Loading...
-                                                    </div>
-                                                ) : "No campaigns found."}
-                                            </CommandEmpty>
-                                            <CommandGroup>
-                                                {filteredCampaigns.map((campaign) => (
-                                                    <CommandItem
-                                                        key={campaign._id}
-                                                        value={campaign._id}
-                                                        onSelect={() => {
-                                                            setCampaignId(campaign._id);
-                                                            setErrors(prev => ({ ...prev, campaignId: false }));
-                                                            setCampaignOpen(false);
-                                                        }}
-                                                    >
-                                                        <Check
-                                                            className={cn(
-                                                                "mr-2 h-4 w-4",
-                                                                campaignId === campaign._id ? "opacity-100" : "opacity-0"
-                                                            )}
-                                                        />
-                                                        <div className="flex flex-col">
-                                                            <span>{campaign.name}</span>
-                                                            {campaign.code && (
-                                                                <span className="text-xs text-gray-400">{campaign.code}</span>
-                                                            )}
-                                                        </div>
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-
-                                            {/* Pagination Footer */}
-                                            {(hasMoreCampaigns || fetchingCampaigns) && !campaignSearch && (
-                                                <div className="border-t border-gray-100 p-2">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
-                                                            handleLoadMoreCampaigns();
-                                                        }}
-                                                        disabled={fetchingCampaigns}
-                                                        className="w-full text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                                    >
-                                                        {fetchingCampaigns ? (
-                                                            <>
-                                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                                Loading more...
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                Load More
-                                                                <span className="ml-2 text-xs text-gray-400">
-                                                                    ({allCampaigns.length} of {campaignsData?.pagination?.total || "?"})
-                                                                </span>
-                                                            </>
-                                                        )}
-                                                    </Button>
-                                                </div>
+                                }
+                                renderItem={(campaign) => (
+                                    <div
+                                        className="flex items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                                        onClick={() => {
+                                            setCampaignId(campaign._id);
+                                            setErrors(prev => ({ ...prev, campaignId: false }));
+                                            setCampaignOpen(false);
+                                        }}
+                                    >
+                                        <Check
+                                            className={cn(
+                                                "mr-3 h-4 w-4 text-green-600",
+                                                campaignId === campaign._id ? "opacity-100" : "opacity-0"
                                             )}
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
+                                        />
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-gray-900">{campaign.name}</span>
+                                            {campaign.code && (
+                                                <span className="text-sm text-gray-500">{campaign.code}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            />
                         </div>
 
                         {/* Description */}

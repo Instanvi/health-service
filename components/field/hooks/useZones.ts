@@ -6,17 +6,26 @@ import { toast } from "sonner";
 
 /* ——— TYPES ——— */
 
+
 export interface GeoJSONPolygon {
     type: "Polygon";
     coordinates: number[][][];
 }
 
 export interface Zone {
-    id: string;
+    _id: string;
     name: string;
     description: string;
     campaign_id: string;
     boundaries: GeoJSONPolygon;
+    code?: string;
+    metadata?: {
+        created_at: string;
+        created_by: string;
+        modified_at: string;
+        modified_by: string;
+        facility_id: string;
+    };
     created_at?: string;
     updated_at?: string;
 }
@@ -37,7 +46,13 @@ export interface UpdateZonePayload {
 
 export interface ZonesResponse {
     count: number;
-    results: Zone[];
+    zones: Zone[];
+    pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+    };
 }
 
 /* ——— FACILITY ZONES TYPES ——— */
@@ -92,7 +107,7 @@ export interface FacilityZonesResponse {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.dappahealth.eu/dappa";
 
-async function fetchZonesByCampaign(options: { campaignId: string; campaignCode?: string; page?: number; limit?: number }): Promise<{ zones: Zone[]; count: number }> {
+async function fetchZonesByCampaign(options: { campaignId: string; campaignCode?: string; page?: number; limit?: number }): Promise<{ zones: Zone[]; count: number; pagination?: { page: number; limit: number; total: number; total_pages: number } }> {
     const { campaignId, campaignCode, page = 1, limit = 10 } = options;
     const token = Cookies.get("authToken");
     if (!campaignId) return { zones: [], count: 0 };
@@ -121,7 +136,8 @@ async function fetchZonesByCampaign(options: { campaignId: string; campaignCode?
     }
     return {
         zones: data.zones || data.results || [],
-        count: data.total_zones || data.count || (data.zones?.length || data.results?.length || 0)
+        count: data.total_zones || data.count || (data.zones?.length || data.results?.length || 0),
+        pagination: data.pagination
     };
 }
 

@@ -8,6 +8,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Search, Plus, Check, ChevronsUpDown } from "lucide-react";
 import { DataTable } from "../PatientsTable";
+import { SelectionSheet } from "@/components/ui/selection-sheet";
 import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import {
     useTeamMembers,
@@ -201,30 +202,72 @@ export function Teams() {
         pageSize: teamsLimit
     });
 
-    console.log("Facility Teams:", teamsData);
+    // Accumulate campaigns
+    const [allCampaigns, setAllCampaigns] = React.useState<import("./hooks").Campaign[]>([]);
+    React.useEffect(() => {
+        if (campaignsData?.campaigns) {
+            if (campaignPage === 1) {
+                setAllCampaigns(campaignsData.campaigns);
+            } else {
+                setAllCampaigns(prev => {
+                    const existingIds = new Set(prev.map(c => c._id));
+                    const newItems = campaignsData.campaigns.filter(c => !existingIds.has(c._id));
+                    return [...prev, ...newItems];
+                });
+            }
+        }
+    }, [campaignsData?.campaigns, campaignPage]);
+
+    // Accumulate zones
+    const [allZones, setAllZones] = React.useState<import("./hooks").Zone[]>([]);
+    React.useEffect(() => {
+        if (zonesData?.zones) {
+            if (zonePage === 1) {
+                setAllZones(zonesData.zones);
+            } else {
+                setAllZones(prev => {
+                    const existingIds = new Set(prev.map(z => z._id));
+                    const newItems = zonesData.zones.filter(z => !existingIds.has(z._id));
+                    return [...prev, ...newItems];
+                });
+            }
+        }
+    }, [zonesData?.zones, zonePage]);
 
     // Update form when campaign changes to reset zone
     React.useEffect(() => {
         setFormData(prev => ({ ...prev, zone_id: "" }));
+        setZonePage(1);
+        setAllZones([]);
     }, [formData.campaign_id]);
 
     // Filter campaigns for dropdown
     const filteredCampaigns = React.useMemo(() => {
-        if (!campaignsData?.campaigns) return [];
-        if (!campaignSearch) return campaignsData.campaigns;
-        return campaignsData.campaigns.filter(c =>
+        if (!allCampaigns.length) return [];
+        if (!campaignSearch) return allCampaigns;
+        return allCampaigns.filter(c =>
             c.name.toLowerCase().includes(campaignSearch.toLowerCase())
         );
-    }, [campaignsData, campaignSearch]);
+    }, [allCampaigns, campaignSearch]);
 
     // Filter zones for dropdown
     const filteredZones = React.useMemo(() => {
-        if (!zonesData?.zones) return [];
-        if (!zoneSearch) return zonesData.zones;
-        return zonesData.zones.filter((z: any) =>
+        if (!allZones.length) return [];
+        if (!zoneSearch) return allZones;
+        return allZones.filter((z) =>
             z.name.toLowerCase().includes(zoneSearch.toLowerCase())
         );
-    }, [zonesData, zoneSearch]);
+    }, [allZones, zoneSearch]);
+
+    const hasMoreCampaigns = React.useMemo(() => {
+        if (!campaignsData?.pagination) return false;
+        return campaignsData.pagination.page < campaignsData.pagination.total_pages;
+    }, [campaignsData?.pagination]);
+
+    const hasMoreZones = React.useMemo(() => {
+        if (!zonesData?.pagination) return false;
+        return zonesData.pagination.page < zonesData.pagination.total_pages;
+    }, [zonesData?.pagination]);
 
 
     const { data: allMembers } = useTeamMembers();
@@ -233,7 +276,7 @@ export function Teams() {
 
 
     const selectedCampaignName = campaignsData?.campaigns?.find(c => c._id === formData.campaign_id)?.name;
-    const selectedZoneName = zonesData?.zones?.find((z: any) => z._id === formData.zone_id)?.name;
+    const selectedZoneName = zonesData?.zones?.find(z => z._id === formData.zone_id)?.name;
 
     const [errors, setErrors] = React.useState({
         name: false,
@@ -516,8 +559,18 @@ export function Teams() {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Campaign <span className="text-red-500">*</span>
                                     </label>
-                                    <Popover open={campaignOpen} onOpenChange={setCampaignOpen}>
-                                        <PopoverTrigger asChild>
+                                    <SelectionSheet
+                                        open={campaignOpen}
+                                        onOpenChange={setCampaignOpen}
+                                        title="Select Campaign"
+                                        searchPlaceholder="Search campaign..."
+                                        searchValue={campaignSearch}
+                                        onSearchChange={setCampaignSearch}
+                                        items={filteredCampaigns}
+                                        isLoading={loadingCampaigns}
+                                        hasMore={hasMoreCampaigns && !campaignSearch}
+                                        onLoadMore={() => setCampaignPage(p => p + 1)}
+                                        trigger={
                                             <Button
                                                 variant="outline"
                                                 role="combobox"
@@ -532,79 +585,46 @@ export function Teams() {
                                                 {selectedCampaignName || "Select Campaign"}
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="p-0">
-                                            <Command>
-                                                <CommandInput
-                                                    placeholder="Search campaign..."
-                                                    value={campaignSearch}
-                                                    onValueChange={setCampaignSearch}
-                                                />
-                                                <CommandList>
-                                                    {loadingCampaigns ? (
-                                                        <CommandEmpty>Loading...</CommandEmpty>
-                                                    ) : filteredCampaigns.length === 0 ? (
-                                                        <CommandEmpty>No campaign found.</CommandEmpty>
-                                                    ) : (
-                                                        <CommandGroup >
-                                                            {filteredCampaigns.map((campaign) => (
-                                                                <CommandItem
-                                                                    key={campaign._id}
-                                                                    value={campaign.name}
-                                                                    onSelect={() => {
-                                                                        setFormData(prev => ({ ...prev, campaign_id: campaign._id }));
-                                                                        setCampaignOpen(false);
-                                                                        setErrors(prev => ({ ...prev, campaign_id: false }));
-                                                                    }}
-                                                                >
-                                                                    <Check
-                                                                        className={cn(
-                                                                            "mr-2 h-4 w-4",
-                                                                            formData.campaign_id === campaign._id ? "opacity-100" : "opacity-0"
-                                                                        )}
-                                                                    />
-                                                                    {campaign.name}
-                                                                </CommandItem>
-                                                            ))}
-                                                        </CommandGroup>
+                                        }
+                                        renderItem={(campaign) => (
+                                            <div
+                                                className="flex items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                                                onClick={() => {
+                                                    setFormData(prev => ({ ...prev, campaign_id: campaign._id }));
+                                                    setCampaignOpen(false);
+                                                    setErrors(prev => ({ ...prev, campaign_id: false }));
+                                                }}
+                                            >
+                                                <Check
+                                                    className={cn(
+                                                        "mr-3 h-4 w-4 text-green-600",
+                                                        formData.campaign_id === campaign._id ? "opacity-100" : "opacity-0"
                                                     )}
-                                                    <div className="flex items-center justify-between p-2 border-t">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                setCampaignPage(p => Math.max(1, p - 1));
-                                                            }}
-                                                            disabled={campaignPage === 1}
-                                                        >
-                                                            Previous
-                                                        </Button>
-                                                        <span className="text-xs text-gray-500">Page {campaignPage}</span>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                setCampaignPage(p => p + 1);
-                                                            }}
-                                                            disabled={!campaignsData?.campaigns || campaignsData.campaigns.length < 10}
-                                                        >
-                                                            Next
-                                                        </Button>
-                                                    </div>
-                                                </CommandList>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-gray-900">{campaign.name}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    />
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Zone <span className="text-red-500">*</span>
                                     </label>
-                                    <Popover open={zoneOpen} onOpenChange={setZoneOpen}>
-                                        <PopoverTrigger asChild>
+                                    <SelectionSheet
+                                        open={zoneOpen}
+                                        onOpenChange={setZoneOpen}
+                                        title="Select Zone"
+                                        searchPlaceholder="Search zone..."
+                                        searchValue={zoneSearch}
+                                        onSearchChange={setZoneSearch}
+                                        items={filteredZones}
+                                        isLoading={loadingZones}
+                                        hasMore={hasMoreZones && !zoneSearch}
+                                        onLoadMore={() => setZonePage(p => p + 1)}
+                                        trigger={
                                             <Button
                                                 variant="outline"
                                                 role="combobox"
@@ -621,71 +641,28 @@ export function Teams() {
                                                 {selectedZoneName || "Select Zone"}
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="p-0">
-                                            <Command>
-                                                <CommandInput
-                                                    placeholder="Search zone..."
-                                                    value={zoneSearch}
-                                                    onValueChange={setZoneSearch}
-                                                />
-                                                <CommandList>
-                                                    {loadingZones ? (
-                                                        <CommandEmpty>Loading zones...</CommandEmpty>
-                                                    ) : filteredZones.length === 0 ? (
-                                                        <CommandEmpty>No zone found.</CommandEmpty>
-                                                    ) : (
-                                                        <CommandGroup>
-                                                            {filteredZones.map((zone: any) => (
-                                                                <CommandItem
-                                                                    key={zone._id}
-                                                                    value={zone.name}
-                                                                    onSelect={() => {
-                                                                        setFormData(prev => ({ ...prev, zone_id: zone._id }));
-                                                                        setZoneOpen(false);
-                                                                        setErrors(prev => ({ ...prev, zone_id: false }));
-                                                                    }}
-                                                                >
-                                                                    <Check
-                                                                        className={cn(
-                                                                            "mr-2 h-4 w-4",
-                                                                            formData.zone_id === zone._id ? "opacity-100" : "opacity-0"
-                                                                        )}
-                                                                    />
-                                                                    {zone.name}
-                                                                </CommandItem>
-                                                            ))}
-                                                        </CommandGroup>
+                                        }
+                                        renderItem={(zone) => (
+                                            <div
+                                                className="flex items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                                                onClick={() => {
+                                                    setFormData(prev => ({ ...prev, zone_id: zone._id }));
+                                                    setZoneOpen(false);
+                                                    setErrors(prev => ({ ...prev, zone_id: false }));
+                                                }}
+                                            >
+                                                <Check
+                                                    className={cn(
+                                                        "mr-3 h-4 w-4 text-green-600",
+                                                        formData.zone_id === zone._id ? "opacity-100" : "opacity-0"
                                                     )}
-                                                    <div className="flex items-center justify-between p-2 border-t">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                setZonePage(p => Math.max(1, p - 1));
-                                                            }}
-                                                            disabled={zonePage === 1}
-                                                        >
-                                                            Previous
-                                                        </Button>
-                                                        <span className="text-xs text-gray-500">Page {zonePage}</span>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                setZonePage(p => p + 1);
-                                                            }}
-                                                            disabled={!zonesData?.zones || zonesData.zones.length < 10}
-                                                        >
-                                                            Next
-                                                        </Button>
-                                                    </div>
-                                                </CommandList>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-gray-900">{zone.name}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    />
                                 </div>
 
                                 <div>

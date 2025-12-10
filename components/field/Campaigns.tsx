@@ -37,6 +37,7 @@ import { useCampaigns, Campaign } from "./hooks/useCampaigns";
 import { useTeamMembers } from "../team/hooks/useTeamMembers";
 import { toast } from "sonner";
 import { DataTable } from "@/components/PatientsTable";
+import { SelectionSheet } from "@/components/ui/selection-sheet";
 
 // Types
 type CampaignStatus = "active" | "inactive" | "completed" | "draft";
@@ -358,8 +359,16 @@ export function Campaigns() {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Campaign Manager <span className="text-red-500">*</span>
                                     </label>
-                                    <Popover open={managerOpen} onOpenChange={setManagerOpen}>
-                                        <PopoverTrigger asChild>
+                                    <SelectionSheet
+                                        open={managerOpen}
+                                        onOpenChange={setManagerOpen}
+                                        title="Select Campaign Manager"
+                                        searchPlaceholder="Search managers..."
+                                        searchValue={managerSearch}
+                                        onSearchChange={setManagerSearch}
+                                        items={filteredManagers}
+                                        isLoading={loadingMembers}
+                                        trigger={
                                             <Button
                                                 variant="outline"
                                                 role="combobox"
@@ -376,51 +385,29 @@ export function Campaigns() {
                                                     : "Select Manager..."}
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-[400px] p-0" align="start">
-                                            <Command>
-                                                <CommandInput
-                                                    placeholder="Search managers..."
-                                                    value={managerSearch}
-                                                    onValueChange={setManagerSearch}
+                                        }
+                                        renderItem={(member: any) => (
+                                            <div
+                                                className="flex items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                                                onClick={() => {
+                                                    setFormData(prev => ({ ...prev, manager_personality_id: member._id }));
+                                                    setErrors(prev => ({ ...prev, manager_personality_id: false }));
+                                                    setManagerOpen(false);
+                                                }}
+                                            >
+                                                <Check
+                                                    className={cn(
+                                                        "mr-3 h-4 w-4 text-green-600",
+                                                        formData.manager_personality_id === member._id ? "opacity-100" : "opacity-0"
+                                                    )}
                                                 />
-                                                <CommandList className="max-h-[300px]">
-                                                    <CommandEmpty>
-                                                        {loadingMembers ? (
-                                                            <div className="flex items-center justify-center py-4">
-                                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                                Loading...
-                                                            </div>
-                                                        ) : "No managers found."}
-                                                    </CommandEmpty>
-                                                    <CommandGroup>
-                                                        {filteredManagers.map((member: any) => (
-                                                            <CommandItem
-                                                                key={member._id}
-                                                                value={member._id}
-                                                                onSelect={() => {
-                                                                    setFormData(prev => ({ ...prev, manager_personality_id: member._id }));
-                                                                    setErrors(prev => ({ ...prev, manager_personality_id: false }));
-                                                                    setManagerOpen(false);
-                                                                }}
-                                                            >
-                                                                <Check
-                                                                    className={cn(
-                                                                        "mr-2 h-4 w-4",
-                                                                        formData.manager_personality_id === member._id ? "opacity-100" : "opacity-0"
-                                                                    )}
-                                                                />
-                                                                <div className="flex flex-col">
-                                                                    <span>{member.first_name} {member.last_name}</span>
-                                                                    <span className="text-xs text-gray-400">{member.username}</span>
-                                                                </div>
-                                                            </CommandItem>
-                                                        ))}
-                                                    </CommandGroup>
-                                                </CommandList>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-gray-900">{member.first_name} {member.last_name}</span>
+                                                    <span className="text-sm text-gray-500">{member.username}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    />
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
