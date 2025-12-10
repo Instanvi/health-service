@@ -3,14 +3,14 @@
 import React, { useCallback } from "react";
 import { GoogleMap, Polygon } from "@react-google-maps/api";
 import { useGoogleMaps } from "@/lib/GoogleMapsProvider";
-import { FacilityZone } from "./hooks/useZones";
+import { FacilityZone, Zone } from "./hooks/useZones";
 
 const mapContainerStyle = { width: "100%", height: "100%" };
 const center = { lat: 4.0511, lng: 9.7679 }; // Default to Douala/Wouri area
 
 interface FieldMapProps {
-    zones?: FacilityZone[];
-    onZoneHover?: (zone: FacilityZone | null) => void;
+    zones?: (FacilityZone | Zone)[];
+    onZoneHover?: (zone: FacilityZone | Zone | null) => void;
     selectedZoneId?: string;
 }
 

@@ -7,8 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import FieldMap from "@/components/field/FieldMap";
 import { useCampaigns } from "./hooks/useCampaigns";
-import { useZonesByFacility, FacilityZone } from "./hooks/useZones";
-import { useTeamsByFacility, useFieldTeamMembers, Team } from "./hooks/useFieldTeams";
+import { useZonesByFacility, useZonesByCampaign, FacilityZone, Zone } from "./hooks/useZones";
+import { useTeamsByFacility, useTeamsByZone, useFieldTeamMembers, Team } from "./hooks/useFieldTeams";
 
 const DATE_OPTIONS = [
     { id: "today", label: "Today" },
@@ -172,24 +172,88 @@ export function Live({
     // Zones data with pagination
     const [zonePage, setZonePage] = useState(1);
     const [allZones, setAllZones] = useState<{ id: string; label: string }[]>([]);
-    const [allZoneObjects, setAllZoneObjects] = useState<FacilityZone[]>([]);
-    const [hoveredZone, setHoveredZone] = useState<FacilityZone | null>(null);
+    const [allZoneObjects, setAllZoneObjects] = useState<(FacilityZone | Zone)[]>([]);
+    const [hoveredZone, setHoveredZone] = useState<FacilityZone | Zone | null>(null);
 
-    const { data: zonesData, isLoading: loadingZones, isFetching: fetchingZones } = useZonesByFacility({
+    // Conditional Zone Fetching
+    const {
+        data: facilityZonesData,
+        isLoading: loadingFacilityZones,
+        isFetching: fetchingFacilityZones
+    } = useZonesByFacility({
         page: zonePage,
         pageSize: 20,
-        campaignId: selectedCampaign || undefined,
+        // We only use this when no campaign is selected, so we don't pass campaignId here anymore
+        // or we keep it undefined.
     });
+
+    const {
+        data: campaignZonesData,
+        isLoading: loadingCampaignZones,
+        isFetching: fetchingCampaignZones
+    } = useZonesByCampaign({
+        campaignId: selectedCampaign,
+        page: zonePage,
+        limit: 20
+    });
+
+    // Determine which zone data to use
+    const zonesData = selectedCampaign ? campaignZonesData : facilityZonesData;
+    const loadingZones = selectedCampaign ? loadingCampaignZones : loadingFacilityZones;
+    const fetchingZones = selectedCampaign ? fetchingCampaignZones : fetchingFacilityZones;
 
     // Teams data with pagination
     const [teamPage, setTeamPage] = useState(1);
     const [allTeams, setAllTeams] = useState<{ id: string; label: string }[]>([]);
     const [allTeamObjects, setAllTeamObjects] = useState<Team[]>([]);
 
-    const { data: teamsData, isLoading: loadingTeams, isFetching: fetchingTeams } = useTeamsByFacility({
+    // Conditional Team Fetching
+    const {
+        data: facilityTeamsData,
+        isLoading: loadingFacilityTeams,
+        isFetching: fetchingFacilityTeams
+    } = useTeamsByFacility({
         page: teamPage,
         pageSize: 20,
     });
+
+    const {
+        data: zoneTeamsData,
+        isLoading: loadingZoneTeams,
+        isFetching: fetchingZoneTeams
+    } = useTeamsByZone({
+        zoneId: selectedZone,
+        page: teamPage,
+        limit: 20,
+    });
+
+    // Determine which team data to use
+    const teamsData = selectedZone ? zoneTeamsData : facilityTeamsData;
+    const loadingTeams = selectedZone ? loadingZoneTeams : loadingFacilityTeams;
+    const fetchingTeams = selectedZone ? fetchingZoneTeams : fetchingFacilityTeams;
+
+    // Reset zones when campaign changes
+    useEffect(() => {
+        setZonePage(1);
+        setAllZones([]);
+        setAllZoneObjects([]);
+        setSelectedZone("");
+        // Also reset teams
+        setTeamPage(1);
+        setAllTeams([]);
+        setAllTeamObjects([]);
+        setSelectedTeam("");
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedCampaign]);
+
+    // Reset teams when zone changes
+    useEffect(() => {
+        setTeamPage(1);
+        setAllTeams([]);
+        setAllTeamObjects([]);
+        setSelectedTeam("");
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedZone]);
 
     // Accumulate campaigns
     useEffect(() => {
@@ -213,15 +277,16 @@ export function Live({
 
     // Accumulate zones
     useEffect(() => {
-        if (zonesData?.zones) {
-            const zoneOptions = zonesData.zones.map(z => ({
+        const fetchedZones = zonesData?.zones;
+        if (fetchedZones) {
+            const zoneOptions = fetchedZones.map(z => ({
                 id: z._id,
                 label: z.name,
             }));
 
             if (zonePage === 1) {
                 setAllZones(zoneOptions);
-                setAllZoneObjects(zonesData.zones);
+                setAllZoneObjects(fetchedZones);
             } else {
                 setAllZones(prev => {
                     const existingIds = new Set(prev.map(z => z.id));
@@ -230,24 +295,25 @@ export function Live({
                 });
                 setAllZoneObjects(prev => {
                     const existingIds = new Set(prev.map(z => z._id));
-                    const newZones = zonesData.zones.filter(z => !existingIds.has(z._id));
+                    const newZones = fetchedZones.filter((z: FacilityZone | Zone) => !existingIds.has(z._id));
                     return [...prev, ...newZones];
                 });
             }
         }
-    }, [zonesData?.zones, zonePage]);
+    }, [zonesData, zonePage]);
 
     // Accumulate teams
     useEffect(() => {
-        if (teamsData?.teams) {
-            const teamOptions = teamsData.teams.map(t => ({
+        const fetchedTeams = teamsData?.teams;
+        if (fetchedTeams) {
+            const teamOptions = fetchedTeams.map(t => ({
                 id: t._id,
                 label: t.name,
             }));
 
             if (teamPage === 1) {
                 setAllTeams(teamOptions);
-                setAllTeamObjects(teamsData.teams);
+                setAllTeamObjects(fetchedTeams);
             } else {
                 setAllTeams(prev => {
                     const existingIds = new Set(prev.map(t => t.id));
@@ -256,20 +322,12 @@ export function Live({
                 });
                 setAllTeamObjects(prev => {
                     const existingIds = new Set(prev.map(t => t._id));
-                    const newTeams = teamsData.teams.filter(t => !existingIds.has(t._id));
+                    const newTeams = fetchedTeams.filter(t => !existingIds.has(t._id));
                     return [...prev, ...newTeams];
                 });
             }
         }
-    }, [teamsData?.teams, teamPage]);
-
-    // Reset zones when campaign changes
-    useEffect(() => {
-        setZonePage(1);
-        setAllZones([]);
-        setAllZoneObjects([]);
-        setSelectedZone("");
-    }, [selectedCampaign, setSelectedZone]);
+    }, [teamsData, teamPage]);
 
     // Check if there's more data
     const hasMoreCampaigns = campaignsData?.pagination
@@ -277,7 +335,7 @@ export function Live({
         : false;
 
     const hasMoreZones = zonesData?.pagination
-        ? zonesData.pagination.current_page < zonesData.pagination.total_pages
+        ? (zonesData.pagination.current_page ?? (zonesData.pagination as any).page ?? 1) < zonesData.pagination.total_pages
         : false;
 
     const hasMoreTeams = teamsData?.pagination
@@ -291,6 +349,7 @@ export function Live({
 
     // Fetch members for the hovered team
     const { data: teamMembers } = useFieldTeamMembers(hoveredZoneTeam?._id || "");
+    console.log({"teamMembers": teamMembers, hoveredZoneTeam:hoveredZoneTeam});
 
     return (
         <>
@@ -344,70 +403,96 @@ export function Live({
                     </div>
                 </div>
 
-                {/* Map + Zone Info Panel */}
                 <div className="relative flex-1">
                     <FieldMap
-                        zones={allZoneObjects}
+                        zones={selectedZone ? allZoneObjects.filter(z => z._id === selectedZone) : allZoneObjects}
                         onZoneHover={setHoveredZone}
                         selectedZoneId={selectedZone}
                     />
 
-                    {/* Floating Zone Info Card - exactly like in your screenshot */}
-                    {/* Floating Zone Info Card - exactly like in your screenshot */}
+                    {/* Floating Zone Info Card */}
                     {hoveredZone && (
                         <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-20">
-                            <div className="pointer-events-none w-80 bg-white text-[#D0BEBE] shadow-2xl rounded-sm overflow-hidden">
-                                <section className="bg-green-700">
-                                    <h3 className="mb-3 text-lg font-semibold p-4 text-white">
-                                        {hoveredZoneTeam?.campaign?.name || hoveredZone.campaign?.name || "Campaign"}
+                            <div className="pointer-events-none w-80 bg-white shadow-2xl rounded-lg overflow-hidden">
+                                {/* Header - Campaign Name & Code */}
+                                <section className="bg-green-600 px-5 py-4">
+                                    <h3 className="text-xl font-bold text-white">
+                                        {
+                                            hoveredZoneTeam?.campaign?.name ||
+                                            (hoveredZone as FacilityZone).campaign?.name ||
+                                            (selectedCampaign && allCampaigns.find(c => c.id === selectedCampaign)?.label) ||
+                                            "Campaign"
+                                        }
                                     </h3>
+                                    <p className="text-green-100 text-sm mt-0.5">
+                                        #{hoveredZoneTeam?.campaign?.code || 
+                                          (hoveredZone as FacilityZone).campaign?.code || 
+                                          "—"}
+                                    </p>
                                 </section>
-                                <section className="p-5">
-                                    <div className="mb-4 flex items-center gap-2">
-                                        <MapPin className="h-5 w-5" />
-                                        <span className="font-medium text-gray-700">
-                                            {hoveredZoneTeam?.zone?.name || hoveredZone.name}
-                                        </span>
+
+                                {/* Body */}
+                                <section className="p-5 space-y-5">
+                                    {/* Zone Section */}
+                                    <div>
+                                        <div className="flex items-center gap-3 mb-1">
+                                            <MapPinSimpleAreaIcon className="h-6 w-6 text-gray-400" />
+                                            <span className="font-semibold text-gray-800 text-base">
+                                                {hoveredZoneTeam?.zone?.name || hoveredZone.name}
+                                            </span>
+                                        </div>
+                                        <p className="text-gray-500 text-sm ml-9">
+                                            2 sq kilometer Covered
+                                        </p>
                                     </div>
 
-                                    <div className="mb-6 text-sm">
-                                        <span>2 sq kilometer Covered</span>
-                                    </div>
+                                    {/* Divider */}
+                                    <hr className="border-gray-100" />
 
+                                    {/* Team Section */}
                                     {hoveredZoneTeam ? (
-                                        <>
-                                            <div className="flex items-center gap-2">
-                                                <Users className="h-5 w-5" />
-                                                <span className="font-medium text-gray-700">{hoveredZoneTeam.name}</span>
+                                        <div>
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <UsersThreeIcon className="h-6 w-6 text-gray-400" />
+                                                <span className="font-semibold text-gray-800 text-base">
+                                                    {hoveredZoneTeam.name}
+                                                </span>
                                             </div>
 
-                                            <div className="mt-3 space-y-2 text-sm">
+                                            <div className="ml-9 space-y-2">
+                                                {/* Team Lead */}
                                                 {hoveredZoneTeam.team_lead && (
                                                     <div className="flex items-center justify-between">
-                                                        <span>{hoveredZoneTeam.team_lead.first_name} {hoveredZoneTeam.team_lead.last_name}</span>
-                                                        <span className="rounded-full bg-green-500 text-white px-3 py-1 text-xs font-medium">TeamLead</span>
+                                                        <span className="text-gray-700">
+                                                            {hoveredZoneTeam.team_lead.first_name} {hoveredZoneTeam.team_lead.last_name}
+                                                        </span>
+                                                        <span className="rounded-full bg-green-500 text-white px-3 py-1 text-xs font-medium">
+                                                            Team Lead
+                                                        </span>
                                                     </div>
                                                 )}
 
-                                                {/* Display fetched members */}
+                                                {/* Team Members */}
                                                 {teamMembers && teamMembers.length > 0 ? (
                                                     teamMembers
                                                         .filter(m => m.id !== hoveredZoneTeam.team_lead_id)
                                                         .map(member => (
-                                                            <div key={member.id}>
+                                                            <div key={member.id} className="text-gray-600">
                                                                 {member.first_name} {member.last_name}
                                                             </div>
                                                         ))
                                                 ) : (
-                                                    // Fallback if members are not yet loaded or empty
                                                     hoveredZoneTeam.members?.length > 1 && !teamMembers && (
                                                         <div className="text-gray-400 italic text-xs">Loading members...</div>
                                                     )
                                                 )}
                                             </div>
-                                        </>
+                                        </div>
                                     ) : (
-                                        <div className="text-sm text-gray-500">No team assigned</div>
+                                        <div className="flex items-center gap-3">
+                                            <UsersThreeIcon className="h-6 w-6 text-gray-400" />
+                                            <span className="text-gray-500 text-sm">No team assigned</span>
+                                        </div>
                                     )}
                                 </section>
                             </div>

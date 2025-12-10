@@ -4,9 +4,9 @@ import { Live } from "@/components/field/Live";
 import { useState } from "react";
 
 export default function LivePage() {
-    const [selectedCampaign, setSelectedCampaign] = useState("2354");
-    const [selectedZone, setSelectedZone] = useState("8");
-    const [selectedTeam, setSelectedTeam] = useState("peter");
+    const [selectedCampaign, setSelectedCampaign] = useState("");
+    const [selectedZone, setSelectedZone] = useState("");
+    const [selectedTeam, setSelectedTeam] = useState("");
     const [selectedDate, setSelectedDate] = useState("today");
 
     return (

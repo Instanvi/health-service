@@ -122,9 +122,9 @@ function SearchableDropdown({ options, value, onChange, placeholder, icon }: Sea
 }
 
 export default function FieldWorks() {
-    const [selectedCampaign, setSelectedCampaign] = useState("2354");
-    const [selectedZone, setSelectedZone] = useState("8");
-    const [selectedTeam, setSelectedTeam] = useState("peter");
+    const [selectedCampaign, setSelectedCampaign] = useState("");
+    const [selectedZone, setSelectedZone] = useState("");
+    const [selectedTeam, setSelectedTeam] = useState("");
     const [selectedDate, setSelectedDate] = useState("today");
 
     return (

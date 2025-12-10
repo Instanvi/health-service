@@ -51,18 +51,20 @@ export interface Team {
     updated_at?: string;
 }
 
+export interface Pagination {
+    current_page: number;
+    page_size: number;
+    total_items: number;
+    total_pages: number;
+    has_next: boolean;
+    has_previous: boolean;
+}
+
 export interface FacilityTeamsResponse {
     message: string;
     facility_id: string;
     teams: Team[];
-    pagination: {
-        current_page: number;
-        page_size: number;
-        total_items: number;
-        total_pages: number;
-        has_next: boolean;
-        has_previous: boolean;
-    };
+    pagination: Pagination;
 }
 
 export interface TeamMember {
@@ -96,20 +98,20 @@ export interface UpdateTeamPayload {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.dappahealth.eu/dappa";
 
 async function createCampaigner(payload: CreateUserPayload) {
-  const token = Cookies.get("authToken");
+    const token = Cookies.get("authToken");
 
-  const res = await fetch(`${API_BASE}/auth/create-campaigner`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
+    const res = await fetch(`${API_BASE}/auth/create-campaigner`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+    });
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to create user");
-  return data;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to create user");
+    return data;
 }
 
 async function fetchTeamsByCampaign(campaignId: string, campaignCode?: string): Promise<Team[]> {
@@ -136,7 +138,7 @@ async function fetchTeamsByCampaign(campaignId: string, campaignCode?: string): 
     return Array.isArray(data) ? data : (data.results || []);
 }
 
-async function fetchTeamsByZone(options: { zoneId: string; zoneCode?: string; page?: number; limit?: number }): Promise<{ teams: Team[]; count: number }> {
+async function fetchTeamsByZone(options: { zoneId: string; zoneCode?: string; page?: number; limit?: number }): Promise<{ teams: Team[]; count: number; pagination?: Pagination }> {
     const { zoneId, zoneCode, page = 1, limit = 10 } = options;
     const token = Cookies.get("authToken");
     if (!zoneId) return { teams: [], count: 0 };
@@ -160,9 +162,23 @@ async function fetchTeamsByZone(options: { zoneId: string; zoneCode?: string; pa
     }
 
     const data = await res.json();
+
+    let pagination: Pagination | undefined;
+    if (data.pagination) {
+        pagination = {
+            current_page: data.pagination.current_page ?? data.pagination.page ?? 1,
+            page_size: data.pagination.page_size ?? data.pagination.limit ?? limit,
+            total_items: data.pagination.total_items ?? data.pagination.total ?? 0,
+            total_pages: data.pagination.total_pages ?? 1,
+            has_next: data.pagination.has_next ?? false,
+            has_previous: data.pagination.has_previous ?? false
+        };
+    }
+
     return {
         teams: data.teams || [],
-        count: data.pagination?.total_items || data.teams?.length || 0
+        count: data.pagination?.total_items || data.teams?.length || 0,
+        pagination: pagination
     };
 }
 
@@ -320,20 +336,20 @@ export function useUpdateTeam() {
 
 
 export function useCreateCampaigner() {
-  const queryClient = useQueryClient();
+    const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: createCampaigner,
-    onSuccess: () => {
-      toast.success("User created successfully!");
+    return useMutation({
+        mutationFn: createCampaigner,
+        onSuccess: () => {
+            toast.success("User created successfully!");
 
-      // refresh list
-      queryClient.invalidateQueries({
-        queryKey: ["team-members"],
-      });
-    },
-    onError: (err: any) => {
-      toast.error(err.message);
-    },
-  });
+            // refresh list
+            queryClient.invalidateQueries({
+                queryKey: ["team-members"],
+            });
+        },
+        onError: (err: any) => {
+            toast.error(err.message);
+        },
+    });
 }
