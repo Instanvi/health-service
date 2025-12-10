@@ -60,6 +60,10 @@ export interface CampaignsResponse {
         limit: number;
         total: number;
         total_pages: number;
+        has_next?: boolean;
+        has_previous?: boolean;
+        current_page?: number;
+        page_size?: number;
     };
     filters: any;
     campaigns: Campaign[];

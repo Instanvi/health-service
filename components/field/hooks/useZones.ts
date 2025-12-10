@@ -52,6 +52,10 @@ export interface ZonesResponse {
         limit: number;
         total: number;
         total_pages: number;
+        has_next?: boolean;
+        has_previous?: boolean;
+        current_page?: number;
+        page_size?: number;
     };
 }
 
@@ -107,7 +111,7 @@ export interface FacilityZonesResponse {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.dappahealth.eu/dappa";
 
-async function fetchZonesByCampaign(options: { campaignId: string; campaignCode?: string; page?: number; limit?: number }): Promise<{ zones: Zone[]; count: number; pagination?: { page: number; limit: number; total: number; total_pages: number } }> {
+async function fetchZonesByCampaign(options: { campaignId: string; campaignCode?: string; page?: number; limit?: number }): Promise<ZonesResponse> {
     const { campaignId, campaignCode, page = 1, limit = 10 } = options;
     const token = Cookies.get("authToken");
     if (!campaignId) return { zones: [], count: 0 };

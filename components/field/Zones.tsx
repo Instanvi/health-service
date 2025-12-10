@@ -361,7 +361,10 @@ export function Zones() {
     // Check if there are more campaigns to load
     const hasMoreCampaigns = React.useMemo(() => {
         if (!campaignsData?.pagination) return false;
-        return campaignsData.pagination.page < campaignsData.pagination.total_pages;
+        if (typeof campaignsData.pagination.has_next === 'boolean') return campaignsData.pagination.has_next;
+        // Fallback checks
+        const currentPage = campaignsData.pagination.page || campaignsData.pagination.current_page || 1;
+        return currentPage < campaignsData.pagination.total_pages;
     }, [campaignsData?.pagination]);
 
     // Load more campaigns

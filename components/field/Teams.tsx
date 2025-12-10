@@ -184,11 +184,11 @@ export function Teams() {
     });
 
     // Fetch hooks
-    const { data: campaignsData, isLoading: loadingCampaigns } = useCampaigns({
+    const { data: campaignsData, isLoading: loadingCampaigns, isFetching: fetchingCampaigns } = useCampaigns({
         page: campaignPage,
         limit: 10,
     });
-    const { data: zonesData, isLoading: loadingZones } = useZonesByCampaign({
+    const { data: zonesData, isLoading: loadingZones, isFetching: fetchingZones } = useZonesByCampaign({
         campaignId: formData.campaign_id,
         page: zonePage,
         limit: 10
@@ -261,12 +261,18 @@ export function Teams() {
 
     const hasMoreCampaigns = React.useMemo(() => {
         if (!campaignsData?.pagination) return false;
-        return campaignsData.pagination.page < campaignsData.pagination.total_pages;
+        if (typeof campaignsData.pagination.has_next === 'boolean') return campaignsData.pagination.has_next;
+        // Fallback checks
+        const currentPage = campaignsData.pagination.page || campaignsData.pagination.current_page || 1;
+        return currentPage < campaignsData.pagination.total_pages;
     }, [campaignsData?.pagination]);
 
     const hasMoreZones = React.useMemo(() => {
         if (!zonesData?.pagination) return false;
-        return zonesData.pagination.page < zonesData.pagination.total_pages;
+        if (typeof zonesData.pagination.has_next === 'boolean') return zonesData.pagination.has_next;
+        // Fallback checks
+        const currentPage = zonesData.pagination.page || zonesData.pagination.current_page || 1;
+        return currentPage < zonesData.pagination.total_pages;
     }, [zonesData?.pagination]);
 
 
@@ -570,6 +576,7 @@ export function Teams() {
                                         isLoading={loadingCampaigns}
                                         hasMore={hasMoreCampaigns && !campaignSearch}
                                         onLoadMore={() => setCampaignPage(p => p + 1)}
+                                        isLoadingMore={fetchingCampaigns}
                                         trigger={
                                             <Button
                                                 variant="outline"
@@ -624,6 +631,7 @@ export function Teams() {
                                         isLoading={loadingZones}
                                         hasMore={hasMoreZones && !zoneSearch}
                                         onLoadMore={() => setZonePage(p => p + 1)}
+                                        isLoadingMore={fetchingZones}
                                         trigger={
                                             <Button
                                                 variant="outline"

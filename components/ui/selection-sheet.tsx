@@ -79,19 +79,17 @@ export function SelectionSheet<T>({
                                     {renderItem(item)}
                                 </div>
                             ))}
-                            {hasMore && (
-                                <div className="p-4 flex justify-center border-t border-gray-100">
-                                    <Button
-                                        variant="ghost"
-                                        onClick={onLoadMore}
-                                        disabled={isLoadingMore}
-                                        className="text-sm text-blue-600 hover:text-blue-700"
-                                    >
-                                        {isLoadingMore ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                        {isLoadingMore ? "Loading..." : "Load More"}
-                                    </Button>
-                                </div>
-                            )}
+                            <div className="p-4 flex justify-center border-t border-gray-100">
+                                <Button
+                                    variant="ghost"
+                                    onClick={onLoadMore}
+                                    disabled={isLoadingMore}
+                                    className="text-sm text-blue-600 hover:text-blue-700 w-full"
+                                >
+                                    {isLoadingMore ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                    {isLoadingMore ? "Loading..." : "Load More"}
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </ScrollArea>
