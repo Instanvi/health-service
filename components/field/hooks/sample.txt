@@ -1,0 +1,47 @@
+Gõldęñ-sãmã, [12/10/25 5:06 PM]
+To connect to Facility Live: /track/live/facility
+To connect to Campaign Live: /track/live/campaign
+To connect to zone Live: /track/live/zone
+To connect to team Live: /track/live/team
+
+Always pass token as param
+
+Gõldęñ-sãmã, [12/10/25 5:07 PM]
+Ex of broadcast data:
+
+{
+  "type": "location_update",
+  "timestamp": "2025-12-10T14:25:30.456789+00:00",
+  "location": {
+    "type": "Point",
+    "coordinates": [10.1234, 46.5678]
+  },
+  "personality": {
+    "id": "675c3a9e8f1234567890abcd",
+    "first_name": "Alice",
+    "last_name": "Johnson",
+    "code": "PE002001"
+  },
+  "team": {
+    "id": "675c3b2e8f1234567890abce",
+    "name": "Vaccination Team 1",
+    "code": "TM101",
+    "team_lead_id": "675c3a9e8f1234567890abcd",
+    "members_count": 8
+  },
+  "campaign": {
+    "id": "675c3c1e8f1234567890abcf",
+    "name": "COVID-19 Booster Campaign",
+    "status": "active"
+  },
+  "zone": {
+    "id": "675c3d2e8f1234567890abd0",
+    "name": "Downtown District",
+    "code": "ZN205"
+  },
+  "facility": {
+    "id": "675c3e3e8f1234567890abd1",
+    "name": "City General Hospital"
+  }
+}
+

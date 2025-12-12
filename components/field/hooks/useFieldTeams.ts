@@ -68,13 +68,14 @@ export interface FacilityTeamsResponse {
 }
 
 export interface TeamMember {
-    id: string;
-    username: string;
+    _id: string;
+    username?: string;
     first_name: string;
     last_name: string;
     email?: string;
     phone?: string;
     role?: string;
+    code?: string;
 }
 
 export interface CreateTeamPayload {
@@ -114,13 +115,16 @@ async function createCampaigner(payload: CreateUserPayload) {
     return data;
 }
 
-async function fetchTeamsByCampaign(campaignId: string, campaignCode?: string): Promise<Team[]> {
+async function fetchTeamsByCampaign(options: { campaignId: string; campaignCode?: string; page?: number; limit?: number }): Promise<{ teams: Team[]; count: number; pagination?: Pagination }> {
+    const { campaignId, campaignCode, page = 1, limit = 10 } = options;
     const token = Cookies.get("authToken");
-    if (!campaignId) return [];
+    if (!campaignId) return { teams: [], count: 0 };
 
     const queryParams = new URLSearchParams();
     queryParams.append("campaign_id", campaignId);
     if (campaignCode) queryParams.append("campaign_code", campaignCode);
+    queryParams.append("page", page.toString());
+    queryParams.append("page_size", limit.toString());
 
     const res = await fetch(`${API_BASE}/team/campaign?${queryParams.toString()}`, {
         headers: {
@@ -135,7 +139,32 @@ async function fetchTeamsByCampaign(campaignId: string, campaignCode?: string): 
     }
 
     const data = await res.json();
-    return Array.isArray(data) ? data : (data.results || []);
+
+    // Handle both array response and paginated response
+    let teams: Team[] = [];
+    let pagination: Pagination | undefined;
+
+    if (Array.isArray(data)) {
+        teams = data;
+    } else {
+        teams = data.teams || data.results || [];
+        if (data.pagination) {
+            pagination = {
+                current_page: data.pagination.current_page ?? data.pagination.page ?? page,
+                page_size: data.pagination.page_size ?? data.pagination.limit ?? limit,
+                total_items: data.pagination.total_items ?? data.pagination.total ?? teams.length,
+                total_pages: data.pagination.total_pages ?? 1,
+                has_next: data.pagination.has_next ?? false,
+                has_previous: data.pagination.has_previous ?? false
+            };
+        }
+    }
+
+    return {
+        teams,
+        count: pagination?.total_items || teams.length,
+        pagination
+    };
 }
 
 async function fetchTeamsByZone(options: { zoneId: string; zoneCode?: string; page?: number; limit?: number }): Promise<{ teams: Team[]; count: number; pagination?: Pagination }> {
@@ -227,7 +256,14 @@ async function fetchTeamMembers(teamId: string, teamCode?: string): Promise<Team
     }
 
     const data = await res.json();
-    return Array.isArray(data) ? data : (data.results || []);
+
+    // Handle various response formats
+    if (Array.isArray(data)) return data;
+    if (data.members && Array.isArray(data.members)) return data.members;
+    if (data.results && Array.isArray(data.results)) return data.results;
+    if (data.data && Array.isArray(data.data)) return data.data;
+
+    return [];
 }
 
 async function createTeam(payload: CreateTeamPayload) {
@@ -269,11 +305,11 @@ async function updateTeam({ id, payload }: { id: string; payload: UpdateTeamPayl
 
 /* ——— HOOKS ——— */
 
-export function useTeamsByCampaign(campaignId: string, campaignCode?: string) {
+export function useTeamsByCampaign(options: { campaignId: string; campaignCode?: string; page?: number; limit?: number }) {
     return useQuery({
-        queryKey: ["teams", "campaign", campaignId, campaignCode],
-        queryFn: () => fetchTeamsByCampaign(campaignId, campaignCode),
-        enabled: !!campaignId,
+        queryKey: ["teams", "campaign", options.campaignId, options.campaignCode, options.page, options.limit],
+        queryFn: () => fetchTeamsByCampaign(options),
+        enabled: !!options.campaignId,
         staleTime: 5 * 60 * 1000,
     });
 }

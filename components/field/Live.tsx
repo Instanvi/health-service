@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import FieldMap from "@/components/field/FieldMap";
 import { useCampaigns } from "./hooks/useCampaigns";
 import { useZonesByFacility, useZonesByCampaign, FacilityZone, Zone } from "./hooks/useZones";
-import { useTeamsByFacility, useTeamsByZone, useFieldTeamMembers, Team } from "./hooks/useFieldTeams";
+import { useTeamsByFacility, useTeamsByZone, useTeamsByCampaign, useFieldTeamMembers, Team } from "./hooks/useFieldTeams";
 
 const DATE_OPTIONS = [
     { id: "today", label: "Today" },
@@ -207,7 +207,7 @@ export function Live({
     const [allTeams, setAllTeams] = useState<{ id: string; label: string }[]>([]);
     const [allTeamObjects, setAllTeamObjects] = useState<Team[]>([]);
 
-    // Conditional Team Fetching
+    // Conditional Team Fetching - Facility teams (fallback)
     const {
         data: facilityTeamsData,
         isLoading: loadingFacilityTeams,
@@ -217,6 +217,7 @@ export function Live({
         pageSize: 20,
     });
 
+    // Teams by Zone
     const {
         data: zoneTeamsData,
         isLoading: loadingZoneTeams,
@@ -227,10 +228,33 @@ export function Live({
         limit: 20,
     });
 
-    // Determine which team data to use
-    const teamsData = selectedZone ? zoneTeamsData : facilityTeamsData;
-    const loadingTeams = selectedZone ? loadingZoneTeams : loadingFacilityTeams;
-    const fetchingTeams = selectedZone ? fetchingZoneTeams : fetchingFacilityTeams;
+    // Teams by Campaign
+    const {
+        data: campaignTeamsData,
+        isLoading: loadingCampaignTeams,
+        isFetching: fetchingCampaignTeams
+    } = useTeamsByCampaign({
+        campaignId: selectedCampaign,
+        page: teamPage,
+        limit: 20,
+    });
+
+    // Determine which team data to use: Zone > Campaign > Facility
+    const teamsData = selectedZone
+        ? zoneTeamsData
+        : selectedCampaign
+            ? campaignTeamsData
+            : facilityTeamsData;
+    const loadingTeams = selectedZone
+        ? loadingZoneTeams
+        : selectedCampaign
+            ? loadingCampaignTeams
+            : loadingFacilityTeams;
+    const fetchingTeams = selectedZone
+        ? fetchingZoneTeams
+        : selectedCampaign
+            ? fetchingCampaignTeams
+            : fetchingFacilityTeams;
 
     // Reset zones when campaign changes
     useEffect(() => {
@@ -342,14 +366,16 @@ export function Live({
         ? teamsData.pagination.current_page < teamsData.pagination.total_pages
         : false;
 
-    const hoveredZoneTeam = useMemo(() => {
-        if (!hoveredZone) return null;
-        return allTeamObjects.find(t => t.zone_id === hoveredZone._id);
+    // Get ALL teams for the hovered zone (not just one)
+    const hoveredZoneTeams = useMemo(() => {
+        if (!hoveredZone) return [];
+        return allTeamObjects.filter(t => t.zone_id === hoveredZone._id);
     }, [hoveredZone, allTeamObjects]);
 
-    // Fetch members for the hovered team
-    const { data: teamMembers } = useFieldTeamMembers(hoveredZoneTeam?._id || "");
-    console.log({"teamMembers": teamMembers, hoveredZoneTeam:hoveredZoneTeam});
+    // Get first team for campaign info (header display)
+    const firstTeam = hoveredZoneTeams[0] || null;
+
+    console.log({ "hoveredZoneTeams": hoveredZoneTeams, "count": hoveredZoneTeams.length });
 
     return (
         <>
@@ -410,91 +436,125 @@ export function Live({
                         selectedZoneId={selectedZone}
                     />
 
-                    {/* Floating Zone Info Card */}
+                    {/* Floating Zone Info Cards - Each team gets its own card */}
                     {hoveredZone && (
                         <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-20">
-                            <div className="pointer-events-none w-80 bg-white shadow-2xl rounded-lg overflow-hidden">
-                                {/* Header - Campaign Name & Code */}
-                                <section className="bg-green-600 px-5 py-4">
-                                    <h3 className="text-xl font-bold text-white">
-                                        {
-                                            hoveredZoneTeam?.campaign?.name ||
-                                            (hoveredZone as FacilityZone).campaign?.name ||
-                                            (selectedCampaign && allCampaigns.find(c => c.id === selectedCampaign)?.label) ||
-                                            "Campaign"
-                                        }
-                                    </h3>
-                                    <p className="text-green-100 text-sm mt-0.5">
-                                        #{hoveredZoneTeam?.campaign?.code || 
-                                          (hoveredZone as FacilityZone).campaign?.code || 
-                                          "—"}
-                                    </p>
-                                </section>
+                            <div className="pointer-events-none flex gap-4 max-w-[90vw] overflow-x-auto px-4">
+                                {hoveredZoneTeams.length > 0 ? (
+                                    hoveredZoneTeams.map((team) => (
+                                        <div
+                                            key={team._id}
+                                            className="w-80 flex-shrink-0 bg-white shadow-2xl rounded-lg overflow-hidden"
+                                        >
+                                            {/* Header - Campaign Name & Code */}
+                                            <section className="bg-green-600 px-5 py-4">
+                                                <h3 className="text-xl font-bold text-white">
+                                                    {team.campaign?.name ||
+                                                        (hoveredZone as FacilityZone).campaign?.name ||
+                                                        (selectedCampaign && allCampaigns.find(c => c.id === selectedCampaign)?.label) ||
+                                                        "Campaign"}
+                                                </h3>
+                                                <p className="text-green-100 text-sm mt-0.5">
+                                                    #{team.campaign?.code ||
+                                                        (hoveredZone as FacilityZone).campaign?.code ||
+                                                        "—"}
+                                                </p>
+                                            </section>
 
-                                {/* Body */}
-                                <section className="p-5 space-y-5">
-                                    {/* Zone Section */}
-                                    <div>
-                                        <div className="flex items-center gap-3 mb-1">
-                                            <MapPinSimpleAreaIcon className="h-6 w-6 text-gray-400" />
-                                            <span className="font-semibold text-gray-800 text-base">
-                                                {hoveredZoneTeam?.zone?.name || hoveredZone.name}
-                                            </span>
-                                        </div>
-                                        <p className="text-gray-500 text-sm ml-9">
-                                            2 sq kilometer Covered
-                                        </p>
-                                    </div>
-
-                                    {/* Divider */}
-                                    <hr className="border-gray-100" />
-
-                                    {/* Team Section */}
-                                    {hoveredZoneTeam ? (
-                                        <div>
-                                            <div className="flex items-center gap-3 mb-3">
-                                                <UsersThreeIcon className="h-6 w-6 text-gray-400" />
-                                                <span className="font-semibold text-gray-800 text-base">
-                                                    {hoveredZoneTeam.name}
-                                                </span>
-                                            </div>
-
-                                            <div className="ml-9 space-y-2">
-                                                {/* Team Lead */}
-                                                {hoveredZoneTeam.team_lead && (
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-gray-700">
-                                                            {hoveredZoneTeam.team_lead.first_name} {hoveredZoneTeam.team_lead.last_name}
-                                                        </span>
-                                                        <span className="rounded-full bg-green-500 text-white px-3 py-1 text-xs font-medium">
-                                                            Team Lead
+                                            {/* Body */}
+                                            <section className="p-5 space-y-4">
+                                                {/* Zone Section */}
+                                                <div>
+                                                    <div className="flex items-center gap-3 mb-1">
+                                                        <MapPinSimpleAreaIcon className="h-6 w-6 text-gray-400" />
+                                                        <span className="font-semibold text-gray-800 text-base">
+                                                            {team.zone?.name || hoveredZone.name}
                                                         </span>
                                                     </div>
-                                                )}
+                                                    <p className="text-gray-500 text-sm ml-9">
+                                                        2 sq kilometer Covered
+                                                    </p>
+                                                </div>
 
-                                                {/* Team Members */}
-                                                {teamMembers && teamMembers.length > 0 ? (
-                                                    teamMembers
-                                                        .filter(m => m.id !== hoveredZoneTeam.team_lead_id)
-                                                        .map(member => (
-                                                            <div key={member.id} className="text-gray-600">
-                                                                {member.first_name} {member.last_name}
+                                                {/* Divider */}
+                                                <hr className="border-gray-100" />
+
+                                                {/* Team Section */}
+                                                <div>
+                                                    {/* Team Name */}
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <UsersThreeIcon className="h-6 w-6 text-gray-400" />
+                                                        <span className="font-semibold text-gray-800 text-base">
+                                                            {team.name}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Team Members */}
+                                                    <div className="ml-9 space-y-2">
+                                                        {/* Team Lead */}
+                                                        {team.team_lead && (
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-gray-700">
+                                                                    {team.team_lead.first_name} {team.team_lead.last_name}
+                                                                </span>
+                                                                <span className="rounded-full bg-green-500 text-white px-3 py-1 text-xs font-medium">
+                                                                    Team Lead
+                                                                </span>
                                                             </div>
-                                                        ))
-                                                ) : (
-                                                    hoveredZoneTeam.members?.length > 1 && !teamMembers && (
-                                                        <div className="text-gray-400 italic text-xs">Loading members...</div>
-                                                    )
-                                                )}
+                                                        )}
+
+                                                        {/* Other Members Count */}
+                                                        {team.members && team.members.length > 1 && (
+                                                            <div className="text-gray-500 text-sm">
+                                                                +{team.members.length - 1} other member{team.members.length > 2 ? 's' : ''}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </section>
+                                        </div>
+                                    ))
+                                ) : (
+                                    /* Single card for when no teams are assigned */
+                                    <div className="w-80 bg-white shadow-2xl rounded-lg overflow-hidden">
+                                        {/* Header */}
+                                        <section className="bg-green-600 px-5 py-4">
+                                            <h3 className="text-xl font-bold text-white">
+                                                {(hoveredZone as FacilityZone).campaign?.name ||
+                                                    (selectedCampaign && allCampaigns.find(c => c.id === selectedCampaign)?.label) ||
+                                                    "Campaign"}
+                                            </h3>
+                                            <p className="text-green-100 text-sm mt-0.5">
+                                                #{(hoveredZone as FacilityZone).campaign?.code || "—"}
+                                            </p>
+                                        </section>
+
+                                        {/* Body */}
+                                        <section className="p-5 space-y-4">
+                                            {/* Zone Section */}
+                                            <div>
+                                                <div className="flex items-center gap-3 mb-1">
+                                                    <MapPinSimpleAreaIcon className="h-6 w-6 text-gray-400" />
+                                                    <span className="font-semibold text-gray-800 text-base">
+                                                        {hoveredZone.name}
+                                                    </span>
+                                                </div>
+                                                <p className="text-gray-500 text-sm ml-9">
+                                                    2 sq kilometer Covered
+                                                </p>
                                             </div>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-3">
-                                            <UsersThreeIcon className="h-6 w-6 text-gray-400" />
-                                            <span className="text-gray-500 text-sm">No team assigned</span>
-                                        </div>
-                                    )}
-                                </section>
+
+                                            {/* Divider */}
+                                            <hr className="border-gray-100" />
+
+                                            {/* No Team Message */}
+                                            <div className="flex items-center gap-3">
+                                                <UsersThreeIcon className="h-6 w-6 text-gray-400" />
+                                                <span className="text-gray-500 text-sm">No team assigned</span>
+                                            </div>
+                                        </section>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
