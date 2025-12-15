@@ -1,7 +1,7 @@
 "use client";
 
 import { Dispatch, SetStateAction, useState, useMemo, useEffect } from "react";
-import { MapPin, Users, Search, ChevronDown, Loader2 } from "lucide-react";
+import { MapPin, Users, Search, ChevronDown, Loader2, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { CalendarPlusIcon, MapPinSimpleAreaIcon, MegaphoneIcon, UsersThreeIcon } from "@phosphor-icons/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import FieldMap from "@/components/field/FieldMap";
 import { useCampaigns } from "./hooks/useCampaigns";
 import { useZonesByFacility, useZonesByCampaign, FacilityZone, Zone } from "./hooks/useZones";
 import { useTeamsByFacility, useTeamsByZone, useTeamsByCampaign, useFieldTeamMembers, Team } from "./hooks/useFieldTeams";
+import { useSmartLiveTracking } from "./hooks/useLiveTracking";
 
 const DATE_OPTIONS = [
     { id: "today", label: "Today" },
@@ -161,6 +162,22 @@ export function Live({
     selectedDate,
     setSelectedDate,
 }: LiveProps) {
+    // Live tracking WebSocket connection
+    // Connects to facility by default, switches to zone/team endpoint when filtered
+    const {
+        movementTrails,
+        isConnected: isLiveConnected,
+        error: liveError,
+        reconnect: reconnectLive,
+        clearTrails,
+        activeTrackingType,
+    } = useSmartLiveTracking({
+        filterCampaignId: selectedCampaign || undefined,
+        filterZoneId: selectedZone || undefined,
+        filterTeamId: selectedTeam || undefined,
+        enabled: true,
+    });
+
     // Campaigns data with pagination
     const [campaignPage, setCampaignPage] = useState(1);
     const [allCampaigns, setAllCampaigns] = useState<{ id: string; label: string }[]>([]);
@@ -429,11 +446,66 @@ export function Live({
                     </div>
                 </div>
 
+                {/* Live Connection Status Indicator */}
+                <div className="absolute top-4 right-6 z-10 flex items-center gap-2">
+                    <div className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium shadow-sm",
+                        isLiveConnected
+                            ? "bg-green-100 text-green-700"
+                            : liveError
+                                ? "bg-red-100 text-red-700"
+                                : "bg-yellow-100 text-yellow-700"
+                    )}>
+                        {isLiveConnected ? (
+                            <>
+                                <Wifi className="h-3.5 w-3.5" />
+                                <span>Live</span>
+                                <span className="text-green-500">•</span>
+                                <span className="capitalize">{activeTrackingType}</span>
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>
+                                </span>
+                            </>
+                        ) : liveError ? (
+                            <>
+                                <WifiOff className="h-3.5 w-3.5" />
+                                <span>Disconnected</span>
+                                <button
+                                    onClick={reconnectLive}
+                                    className="ml-1 p-0.5 hover:bg-red-200 rounded transition-colors"
+                                    title="Reconnect"
+                                >
+                                    <RefreshCw className="h-3 w-3" />
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <span>Connecting to {activeTrackingType}...</span>
+                            </>
+                        )}
+                    </div>
+
+                    {movementTrails.size > 0 && (
+                        <button
+                            onClick={clearTrails}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors shadow-sm"
+                            title="Clear all trails"
+                        >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Clear Trails
+                        </button>
+                    )}
+                </div>
+
                 <div className="relative flex-1">
                     <FieldMap
                         zones={selectedZone ? allZoneObjects.filter(z => z._id === selectedZone) : allZoneObjects}
                         onZoneHover={setHoveredZone}
                         selectedZoneId={selectedZone}
+                        movementTrails={movementTrails}
+                        showTrails={true}
                     />
 
                     {/* Floating Zone Info Cards - Each team gets its own card */}

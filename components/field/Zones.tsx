@@ -3,7 +3,7 @@
 import * as React from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Search, Plus, MapPin, Check, ChevronsUpDown, Trash2, X } from "lucide-react";
+import { Loader2, Search, Plus, MapPin, Check, ChevronsUpDown, Trash2, X, Upload, FileJson } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -318,6 +318,7 @@ export function Zones() {
     const [description, setDescription] = React.useState("");
     const [campaignId, setCampaignId] = React.useState("");
     const [boundaries, setBoundaries] = React.useState<{ lat: number; lng: number }[]>([]);
+    const [inputMethod, setInputMethod] = React.useState<"draw" | "geojson">("draw");
 
     const [errors, setErrors] = React.useState({
         zoneName: false,
@@ -447,6 +448,74 @@ export function Zones() {
     const handleClearBoundaries = () => {
         setBoundaries([]);
     };
+
+    // GeoJSON file upload handler
+    const handleGeoJSONUpload = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const content = event.target?.result as string;
+                const geojson = JSON.parse(content);
+
+                let coordinates: number[][] | null = null;
+
+                // Handle different GeoJSON structures
+                if (geojson.type === "FeatureCollection") {
+                    // FeatureCollection - take the first feature
+                    const feature = geojson.features?.[0];
+                    if (feature?.geometry?.type === "Polygon") {
+                        coordinates = feature.geometry.coordinates[0];
+                    } else if (feature?.geometry?.type === "MultiPolygon") {
+                        // Take the first polygon from MultiPolygon
+                        coordinates = feature.geometry.coordinates[0]?.[0];
+                    }
+                } else if (geojson.type === "Feature") {
+                    // Single Feature
+                    if (geojson.geometry?.type === "Polygon") {
+                        coordinates = geojson.geometry.coordinates[0];
+                    } else if (geojson.geometry?.type === "MultiPolygon") {
+                        coordinates = geojson.geometry.coordinates[0]?.[0];
+                    }
+                } else if (geojson.type === "Polygon") {
+                    // Direct Polygon geometry
+                    coordinates = geojson.coordinates[0];
+                } else if (geojson.type === "MultiPolygon") {
+                    // Direct MultiPolygon geometry
+                    coordinates = geojson.coordinates[0]?.[0];
+                }
+
+                if (!coordinates || coordinates.length < 3) {
+                    toast.error("Invalid GeoJSON: No valid polygon coordinates found");
+                    return;
+                }
+
+                // Convert GeoJSON coordinates [lng, lat] to Google Maps format {lat, lng}
+                const points = coordinates.map((coord: number[]) => ({
+                    lat: coord[1],
+                    lng: coord[0],
+                }));
+
+                setBoundaries(points);
+                setErrors(prev => ({ ...prev, boundaries: false }));
+                toast.success(`Imported ${points.length} boundary points from GeoJSON`);
+            } catch (error) {
+                console.error("Failed to parse GeoJSON:", error);
+                toast.error("Failed to parse GeoJSON file. Please check the file format.");
+            }
+        };
+
+        reader.onerror = () => {
+            toast.error("Failed to read file");
+        };
+
+        reader.readAsText(file);
+
+        // Reset input so the same file can be selected again
+        e.target.value = "";
+    }, []);
 
     // Campaign selection - use accumulated campaigns
     const selectedCampaign = React.useMemo(() => {
@@ -690,57 +759,174 @@ export function Zones() {
                                     </Button>
                                 )}
                             </div>
-                            <p className="text-sm text-gray-500 mb-3">
-                                Click on the map to draw zone boundaries (minimum 3 points)
-                            </p>
 
-                            <div className={cn(
-                                "rounded-lg overflow-hidden border-2",
-                                errors.boundaries ? "border-red-500" : "border-gray-200"
-                            )}>
-                                {!isLoaded ? (
-                                    <div className="w-full h-[400px] bg-gray-100 flex items-center justify-center">
-                                        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                                    </div>
-                                ) : (
-                                    <GoogleMap
-                                        mapContainerStyle={mapContainerStyle}
-                                        center={defaultCenter}
-                                        zoom={12}
-                                        onLoad={onMapLoad}
-                                        onClick={handleMapClick}
-                                        options={{
-                                            mapTypeControl: true,
-                                            streetViewControl: false,
-                                        }}
-                                    >
-                                        {boundaries.length >= 3 && (
-                                            <Polygon
-                                                paths={boundaries}
-                                                options={{
-                                                    fillColor: "#22c55e",
-                                                    fillOpacity: 0.35,
-                                                    strokeColor: "#16a34a",
-                                                    strokeOpacity: 1,
-                                                    strokeWeight: 2,
-                                                }}
-                                            />
-                                        )}
-                                        {boundaries.map((point, index) => (
-                                            <Marker
-                                                key={index}
-                                                position={point}
-                                                label={{
-                                                    text: String(index + 1),
-                                                    color: "white",
-                                                    fontSize: "12px",
-                                                }}
-                                                onClick={() => handleRemovePoint(index)}
-                                            />
-                                        ))}
-                                    </GoogleMap>
-                                )}
+                            {/* Input Method Tabs */}
+                            <div className="flex gap-2 mb-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setInputMethod("draw")}
+                                    className={cn(
+                                        "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                                        inputMethod === "draw"
+                                            ? "bg-green-100 text-green-700 border-2 border-green-500"
+                                            : "bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200"
+                                    )}
+                                >
+                                    <MapPin className="h-4 w-4" />
+                                    Draw on Map
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setInputMethod("geojson")}
+                                    className={cn(
+                                        "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                                        inputMethod === "geojson"
+                                            ? "bg-green-100 text-green-700 border-2 border-green-500"
+                                            : "bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200"
+                                    )}
+                                >
+                                    <FileJson className="h-4 w-4" />
+                                    Import GeoJSON
+                                </button>
                             </div>
+
+                            {/* Draw on Map Method */}
+                            {inputMethod === "draw" && (
+                                <>
+                                    <p className="text-sm text-gray-500 mb-3">
+                                        Click on the map to draw zone boundaries (minimum 3 points)
+                                    </p>
+
+                                    <div className={cn(
+                                        "rounded-lg overflow-hidden border-2",
+                                        errors.boundaries ? "border-red-500" : "border-gray-200"
+                                    )}>
+                                        {!isLoaded ? (
+                                            <div className="w-full h-[400px] bg-gray-100 flex items-center justify-center">
+                                                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                                            </div>
+                                        ) : (
+                                            <GoogleMap
+                                                mapContainerStyle={mapContainerStyle}
+                                                center={defaultCenter}
+                                                zoom={12}
+                                                onLoad={onMapLoad}
+                                                onClick={handleMapClick}
+                                                options={{
+                                                    mapTypeControl: true,
+                                                    streetViewControl: false,
+                                                }}
+                                            >
+                                                {boundaries.length >= 3 && (
+                                                    <Polygon
+                                                        paths={boundaries}
+                                                        options={{
+                                                            fillColor: "#22c55e",
+                                                            fillOpacity: 0.35,
+                                                            strokeColor: "#16a34a",
+                                                            strokeOpacity: 1,
+                                                            strokeWeight: 2,
+                                                        }}
+                                                    />
+                                                )}
+                                                {boundaries.map((point, index) => (
+                                                    <Marker
+                                                        key={index}
+                                                        position={point}
+                                                        label={{
+                                                            text: String(index + 1),
+                                                            color: "white",
+                                                            fontSize: "12px",
+                                                        }}
+                                                        onClick={() => handleRemovePoint(index)}
+                                                    />
+                                                ))}
+                                            </GoogleMap>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Import GeoJSON Method */}
+                            {inputMethod === "geojson" && (
+                                <>
+                                    <p className="text-sm text-gray-500 mb-3">
+                                        Upload a GeoJSON file containing a Polygon or MultiPolygon geometry
+                                    </p>
+
+                                    <div className={cn(
+                                        "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+                                        errors.boundaries ? "border-red-500 bg-red-50" : "border-gray-300 bg-gray-50 hover:border-green-400 hover:bg-green-50"
+                                    )}>
+                                        <input
+                                            type="file"
+                                            accept=".geojson,.json"
+                                            onChange={handleGeoJSONUpload}
+                                            className="hidden"
+                                            id="geojson-upload"
+                                        />
+                                        <label
+                                            htmlFor="geojson-upload"
+                                            className="cursor-pointer flex flex-col items-center gap-3"
+                                        >
+                                            <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
+                                                <Upload className="h-8 w-8 text-gray-500" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-700">
+                                                    Click to upload GeoJSON file
+                                                </p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Supports .geojson and .json files
+                                                </p>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    {/* Preview Map (shown after import) */}
+                                    {boundaries.length >= 3 && (
+                                        <div className="mt-4 rounded-lg overflow-hidden border-2 border-green-200">
+                                            <div className="bg-green-50 px-4 py-2 border-b border-green-200 flex items-center gap-2">
+                                                <Check className="h-4 w-4 text-green-600" />
+                                                <span className="text-sm font-medium text-green-700">
+                                                    GeoJSON imported successfully ({boundaries.length} points)
+                                                </span>
+                                            </div>
+                                            {isLoaded && (
+                                                <GoogleMap
+                                                    mapContainerStyle={{ width: "100%", height: "300px" }}
+                                                    center={boundaries[0] || defaultCenter}
+                                                    zoom={12}
+                                                    onLoad={(map) => {
+                                                        // Fit map to imported boundaries
+                                                        if (boundaries.length > 0) {
+                                                            const bounds = new google.maps.LatLngBounds();
+                                                            boundaries.forEach(p => bounds.extend(p));
+                                                            map.fitBounds(bounds, { top: 30, right: 30, bottom: 30, left: 30 });
+                                                        }
+                                                    }}
+                                                    options={{
+                                                        mapTypeControl: false,
+                                                        streetViewControl: false,
+                                                        zoomControl: true,
+                                                    }}
+                                                >
+                                                    <Polygon
+                                                        paths={boundaries}
+                                                        options={{
+                                                            fillColor: "#22c55e",
+                                                            fillOpacity: 0.35,
+                                                            strokeColor: "#16a34a",
+                                                            strokeOpacity: 1,
+                                                            strokeWeight: 2,
+                                                        }}
+                                                    />
+                                                </GoogleMap>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            )}
 
                             {/* Points List */}
                             {boundaries.length > 0 && (
