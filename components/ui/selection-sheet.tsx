@@ -22,6 +22,20 @@ interface SelectionSheetProps<T> {
     isLoadingMore?: boolean
 }
 
+const SkeletonLoader = () => (
+    <div className="flex flex-col space-y-3 p-4">
+        {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center space-x-4">
+                <div className="h-10 w-10 rounded-full bg-gray-200 animate-pulse" />
+                <div className="space-y-2 flex-1">
+                    <div className="h-4 w-3/4 rounded bg-gray-200 animate-pulse" />
+                    <div className="h-3 w-1/2 rounded bg-gray-200 animate-pulse" />
+                </div>
+            </div>
+        ))}
+    </div>
+);
+
 export function SelectionSheet<T>({
     open,
     onOpenChange,
@@ -37,6 +51,31 @@ export function SelectionSheet<T>({
     hasMore,
     isLoadingMore
 }: SelectionSheetProps<T>) {
+
+    // Infinite scroll observer
+    const observerTarget = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore && !isLoadingMore && onLoadMore) {
+                    onLoadMore();
+                }
+            },
+            { threshold: 1.0 }
+        );
+
+        if (observerTarget.current) {
+            observer.observe(observerTarget.current);
+        }
+
+        return () => {
+            if (observerTarget.current) {
+                observer.unobserve(observerTarget.current);
+            }
+        };
+    }, [observerTarget, hasMore, isLoadingMore, onLoadMore]);
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             {trigger && <SheetTrigger asChild>{trigger}</SheetTrigger>}
@@ -65,9 +104,7 @@ export function SelectionSheet<T>({
                 {/* List */}
                 <ScrollArea className="flex-1 bg-white">
                     {isLoading && items.length === 0 ? (
-                        <div className="flex items-center justify-center py-8">
-                            <Loader2 className="h-6 w-6 animate-spin text-green-600" />
-                        </div>
+                        <SkeletonLoader />
                     ) : items.length === 0 ? (
                         <div className="flex items-center justify-center py-8 text-gray-500">
                             No results found.
@@ -79,16 +116,15 @@ export function SelectionSheet<T>({
                                     {renderItem(item)}
                                 </div>
                             ))}
-                            <div className="p-4 flex justify-center border-t border-gray-100">
-                                <Button
-                                    variant="ghost"
-                                    onClick={onLoadMore}
-                                    disabled={isLoadingMore}
-                                    className="text-sm text-blue-600 hover:text-blue-700 w-full"
-                                >
-                                    {isLoadingMore ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                    {isLoadingMore ? "Loading..." : "Load More"}
-                                </Button>
+
+                            {/* Infinite Scroll Trigger & Loader */}
+                            <div ref={observerTarget} className="h-10 flex items-center justify-center p-4">
+                                {isLoadingMore && (
+                                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                                        <Loader2 className="h-4 w-4 animate-spin text-green-600" />
+                                        <span>Loading more...</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

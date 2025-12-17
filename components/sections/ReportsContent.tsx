@@ -11,7 +11,7 @@ import { Download } from 'lucide-react';
 import { exportHTMLToPDF } from '@/utils/pdfExport';
 import DiseaseReportTemplate from '@/components/pdf/DiseaseReportTemplate';
 import { SelectionSheet } from "@/components/ui/selection-sheet";
-import { useGetFacilities } from "@/components/facility/hooks/useFacility";
+import { useGetFacilitiesInfinite } from "@/components/facility/hooks/useFacility";
 import { useSendWeeklyReport } from "@/hooks/useDHIS2";
 import { Upload } from "lucide-react";
 
@@ -101,9 +101,14 @@ export default function ReportsContent() {
     }
   }, []);
 
-  console.log(userFacilityId)
+  const {
+    data: facilitiesData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingFacilities
+  } = useGetFacilitiesInfinite(userFacilityId);
 
-  const { data: facilitiesData, isLoading: isLoadingFacilities } = useGetFacilities(userFacilityId);
   const { mutate: sendDhisReport, isPending: isSendingDhis } = useSendWeeklyReport();
 
   const [activeView, setActiveView] = useState<ViewType>(View.DAY);
@@ -374,8 +379,9 @@ export default function ReportsContent() {
   };
 
   const filteredFacilities = useMemo(() => {
-    if (!facilitiesData?.results) return [];
-    return facilitiesData.results.filter((f: any) =>
+    if (!facilitiesData) return [];
+    const allFacilities = facilitiesData.pages.flatMap((page: any) => page.results);
+    return allFacilities.filter((f: any) =>
       f.name.toLowerCase().includes(dhisSearch.toLowerCase())
     );
   }, [facilitiesData, dhisSearch]);
@@ -425,45 +431,45 @@ export default function ReportsContent() {
           font-family: Arial, sans-serif;
           border-right: 1px solid #333;
         }
-        .disease-table th, .disease-table td { 
-          border: 1px solid #333; 
-          padding: 6px 4px; 
-          text-align: center; 
+        .disease-table th, .disease-table td {
+          border: 1px solid #333;
+          padding: 6px 4px;
+          text-align: center;
         }
-        .disease-table th { 
-          background-color: #e8e8e8; 
-          font-weight: bold; 
+        .disease-table th {
+          background-color: #e8e8e8;
+          font-weight: bold;
         }
-        .disease-table .disease-col { 
-          text-align: left; 
-          min-width: 150px; 
+        .disease-table .disease-col {
+          text-align: left;
+          min-width: 150px;
         }
-        .disease-table .header-main { 
-          background-color: #d0d0d0; 
-          font-weight: bold; 
+        .disease-table .header-main {
+          background-color: #d0d0d0;
+          font-weight: bold;
         }
-        .disease-table .subheader { 
-          background-color: #e8e8e8; 
-          font-size: 15px; 
+        .disease-table .subheader {
+          background-color: #e8e8e8;
+          font-size: 15px;
         }
-        .disease-table .age-header { 
-          font-size: 14px; 
+        .disease-table .age-header {
+          font-size: 14px;
         }
-        .disease-table .no-col { 
+        .disease-table .no-col {
           width: 30px;
           padding-left: 8px;
           padding-right: 8px;
         }
-        .disease-table input { 
-          width: 100%; 
-          border: none; 
-          text-align: center; 
-          background: transparent; 
-          font-size: 16px; 
+        .disease-table input {
+          width: 100%;
+          border: none;
+          text-align: center;
+          background: transparent;
+          font-size: 16px;
         }
-        .disease-table input:focus { 
-          outline: 1px solid #4CAF50; 
-          background-color: #f0f8ff; 
+        .disease-table input:focus {
+          outline: 1px solid #4CAF50;
+          background-color: #f0f8ff;
         }
       `}</style>
       <div className="mx-auto space-y-6 antialiased ">
@@ -665,6 +671,9 @@ export default function ReportsContent() {
         onSearchChange={setDhisSearch}
         items={filteredFacilities}
         isLoading={isLoadingFacilities}
+        onLoadMore={fetchNextPage}
+        hasMore={hasNextPage}
+        isLoadingMore={isFetchingNextPage}
         renderItem={(facility: any) => (
           <Button
             variant="ghost"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import { FacilityPayload, FacilityResponse } from "../types";
 import { BASE_URL } from "@/lib/axios";
@@ -61,8 +61,6 @@ export function useGetFacilities(parentId: string, page = 1, limit = 100) {
     queryFn: () => fetchFacilities(parentId, page, limit),
   });
 }
-
-import { useInfiniteQuery } from "@tanstack/react-query";
 
 // Infinite GET hook for pagination
 export function useGetFacilitiesInfinite(parentId: string, limit = 20) {
