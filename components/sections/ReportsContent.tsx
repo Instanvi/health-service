@@ -210,25 +210,31 @@ export default function ReportsContent() {
   const reports = useMemo<DiseaseRow[]>(() => {
     if (!apiDiseaseData) return [];
 
-    return apiDiseaseData.map((item: ApiDiseaseItem, index: number) => ({
-      id: index + 1,
-      name: item.disease,
-      isNotifiable: NOTIFIABLE_DISEASES.includes(item.disease),
-      suspected: {
-        '0-14': { m: item.suspected_cases['0_14'].m.toString(), f: item.suspected_cases['0_14'].f.toString() },
-        '15-24': { m: item.suspected_cases['15_24'].m.toString(), f: item.suspected_cases['15_24'].f.toString() },
-        '25-49': { m: item.suspected_cases['25_46'].m.toString(), f: item.suspected_cases['25_46'].f.toString() },
-        '60+': { m: item.suspected_cases['47_plus'].m.toString(), f: item.suspected_cases['47_plus'].f.toString() },
-      },
-      deaths: {
-        '0-14': { m: item.deaths['0_14'].m.toString(), f: item.deaths['0_14'].f.toString() },
-        '15-24': { m: item.deaths['15_24'].m.toString(), f: item.deaths['15_24'].f.toString() },
-        '25-49': { m: item.deaths['25_46'].m.toString(), f: item.deaths['25_46'].f.toString() },
-        '60+': { m: item.deaths['47_plus'].m.toString(), f: item.deaths['47_plus'].f.toString() },
-      },
-      samples: item.sample_cases.toString(),
-      confirmed: item.confirmed_cases.toString(),
-    }));
+    return apiDiseaseData.map((item: ApiDiseaseItem, index: number) => {
+      const getVal = (obj: any, key: string, field: 'm' | 'f') => {
+        return obj?.[key]?.[field]?.toString() || '0';
+      };
+
+      return {
+        id: index + 1,
+        name: item.disease,
+        isNotifiable: NOTIFIABLE_DISEASES.includes(item.disease),
+        suspected: {
+          '0-14': { m: getVal(item.suspected_cases, '0_14', 'm'), f: getVal(item.suspected_cases, '0_14', 'f') },
+          '15-24': { m: getVal(item.suspected_cases, '15_24', 'm'), f: getVal(item.suspected_cases, '15_24', 'f') },
+          '25-49': { m: getVal(item.suspected_cases, '25_46', 'm'), f: getVal(item.suspected_cases, '25_46', 'f') },
+          '60+': { m: getVal(item.suspected_cases, '47_plus', 'm'), f: getVal(item.suspected_cases, '47_plus', 'f') },
+        },
+        deaths: {
+          '0-14': { m: getVal(item.deaths, '0_14', 'm'), f: getVal(item.deaths, '0_14', 'f') },
+          '15-24': { m: getVal(item.deaths, '15_24', 'm'), f: getVal(item.deaths, '15_24', 'f') },
+          '25-49': { m: getVal(item.deaths, '25_46', 'm'), f: getVal(item.deaths, '25_46', 'f') },
+          '60+': { m: getVal(item.deaths, '47_plus', 'm'), f: getVal(item.deaths, '47_plus', 'f') },
+        },
+        samples: item.sample_cases?.toString() || '0',
+        confirmed: item.confirmed_cases?.toString() || '0',
+      };
+    });
   }, [apiDiseaseData]);
 
   const filteredReports = useMemo(() => reports, [reports]);
