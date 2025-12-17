@@ -88,8 +88,8 @@ export default function Settings() {
         { id: 'Facility', label: 'Facility', icon: Hospital },
         { id: 'Team', label: 'Team', icon: UsersIcon },
         { id: 'Security', label: 'Security', icon: ShieldIcon },
+        { id: 'DHIS2', label: 'DHIS2', icon: HospitalIcon },
         { id: 'Terms', label: 'Terms of Service', icon: FileIcon },
-        { id: 'DHIS2', label: 'DHIS2', icon: HospitalIcon }
     ];
 
 
