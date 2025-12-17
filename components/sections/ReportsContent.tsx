@@ -10,6 +10,10 @@ import { useGetDiseaseStats, DiseaseReportItem as ApiDiseaseItem, StatsParams } 
 import { Download } from 'lucide-react';
 import { exportHTMLToPDF } from '@/utils/pdfExport';
 import DiseaseReportTemplate from '@/components/pdf/DiseaseReportTemplate';
+import { SelectionSheet } from "@/components/ui/selection-sheet";
+import { useGetFacilities } from "@/components/facility/hooks/useFacility";
+import { useSendWeeklyReport } from "@/hooks/useDHIS2";
+import { Upload } from "lucide-react";
 
 // --- MOCK DATA & CONFIGURATION ---
 
@@ -76,6 +80,32 @@ const NOTIFIABLE_DISEASES = [
 // 🚀 Main Application Component
 export default function ReportsContent() {
   const baseDate = new Date('2023-06-01');
+
+
+  // DHIS2 Integration
+  const [isDhisSheetOpen, setIsDhisSheetOpen] = useState(false);
+  const [dhisSearch, setDhisSearch] = useState("");
+
+  // Get User Facility ID
+  const [userFacilityId, setUserFacilityId] = useState<string>("");
+
+  useEffect(() => {
+    const userData = localStorage.getItem("userData");
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        setUserFacilityId(user?.facility?.id || "");
+      } catch (e) {
+        console.error("Failed to parse user data", e);
+      }
+    }
+  }, []);
+
+  console.log(userFacilityId)
+
+  const { data: facilitiesData, isLoading: isLoadingFacilities } = useGetFacilities(userFacilityId);
+  const { mutate: sendDhisReport, isPending: isSendingDhis } = useSendWeeklyReport();
+
   const [activeView, setActiveView] = useState<ViewType>(View.DAY);
   const [selectedUnitId, setSelectedUnitId] = useState<string>(format(baseDate, 'yyyy-MM-dd'));
 
@@ -324,7 +354,31 @@ export default function ReportsContent() {
     const filename = `Disease_Report_${activeView}_${format(new Date(), 'yyyy-MM-dd')}`;
 
     await exportHTMLToPDF(diseaseReportRef.current, filename);
+
   };
+
+  const handleExportDHIS = () => {
+    setIsDhisSheetOpen(true);
+  };
+
+  const handleSelectFacility = (facility: any) => {
+    sendDhisReport(facility.name, {
+      onSuccess: () => {
+        toast.success(`Report sent to DHIS2 for ${facility.name}`);
+        setIsDhisSheetOpen(false);
+      },
+      onError: (err) => {
+        toast.error(err.message || "Failed to send report to DHIS2");
+      }
+    });
+  };
+
+  const filteredFacilities = useMemo(() => {
+    if (!facilitiesData?.results) return [];
+    return facilitiesData.results.filter((f: any) =>
+      f.name.toLowerCase().includes(dhisSearch.toLowerCase())
+    );
+  }, [facilitiesData, dhisSearch]);
 
   if (filteredReports) {
     // Store data in sessionStorage for the export page
@@ -450,6 +504,15 @@ export default function ReportsContent() {
             >
               <Download className="h-4 w-4" />
               Export PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportDHIS}
+              className="flex items-center text-white shadow-sm bg-blue-600 hover:bg-blue-700 py-5 gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              Export DHIS
             </Button>
           </div>
         </div>
@@ -593,6 +656,34 @@ export default function ReportsContent() {
         </div>
 
       </div>
+
+      <SelectionSheet
+        open={isDhisSheetOpen}
+        onOpenChange={setIsDhisSheetOpen}
+        title="Select Facility for DHIS2 Export"
+        searchValue={dhisSearch}
+        onSearchChange={setDhisSearch}
+        items={filteredFacilities}
+        isLoading={isLoadingFacilities}
+        renderItem={(facility: any) => (
+          <Button
+            variant="ghost"
+            className="w-full justify-start py-6 px-4 hover:bg-gray-50 text-left font-normal"
+            onClick={() => handleSelectFacility(facility)}
+            disabled={isSendingDhis}
+          >
+            <div className="flex flex-col items-start gap-1">
+              <span className="font-medium text-gray-900">{facility.name}</span>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full capitalize">
+                  {facility.facility_type?.replace('_', ' ') || "Facility"}
+                </span>
+                {facility.code && <span>#{facility.code}</span>}
+              </div>
+            </div>
+          </Button>
+        )}
+      />
     </div>
   );
 }
