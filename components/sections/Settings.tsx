@@ -21,16 +21,38 @@ import {
     UsersIcon,
     ShieldIcon,
     FileIcon,
+    HospitalIcon,
 } from "@phosphor-icons/react";
 import Cookies from "js-cookie";
 import { toast } from 'sonner';
 import Security from '../Security';
 import Team from '../team/Team';
 import Facility from '../facility/Facility';
+import { useConnectDHIS2 } from '@/hooks/useDHIS2';
 
 export default function Settings() {
     const [activeMenu, setActiveMenu] = useState('Notifications');
     const [profile, setProfile] = useState<any>({});
+
+    // DHIS2 State & Mutation
+    const [dhisUsername, setDhisUsername] = useState('');
+    const [dhisPassword, setDhisPassword] = useState('');
+    const { mutate: connectDHIS, isPending: isConnecting } = useConnectDHIS2();
+
+    const handleDHISConnect = () => {
+        if (!dhisUsername || !dhisPassword) {
+            toast.error("Please enter both username and password");
+            return;
+        }
+        connectDHIS({ username: dhisUsername, password: dhisPassword }, {
+            onSuccess: () => {
+                toast.success("Successfully connected to DHIS2");
+            },
+            onError: (error) => {
+                toast.error(error.message);
+            }
+        });
+    };
 
     // Fetch profile
     useEffect(() => {
@@ -51,7 +73,7 @@ export default function Settings() {
                 setProfile(data.data || data);
             } catch (err) {
                 toast.error("Session expired");
-                console.error("Error: ",err)
+                console.error("Error: ", err)
                 // Cookies.remove("authToken");
                 // window.location.href = "/sign-in";
             }
@@ -67,6 +89,7 @@ export default function Settings() {
         { id: 'Team', label: 'Team', icon: UsersIcon },
         { id: 'Security', label: 'Security', icon: ShieldIcon },
         { id: 'Terms', label: 'Terms of Service', icon: FileIcon },
+        { id: 'DHIS2', label: 'DHIS2', icon: HospitalIcon }
     ];
 
 
@@ -175,6 +198,45 @@ export default function Settings() {
                                     <p>
                                         Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.
                                     </p>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
+
+                    {activeMenu === 'DHIS2' && (
+                        <div className="mx-auto">
+                            <Card className="shadow-sm max-w-3xl mx-auto border-none rounded-sm p-4">
+                                <h1 className="text-xl font-bold pb-6 border-b border-gray-50">DHIS2 Configuration</h1>
+                                <CardContent className="p-6 space-y-5">
+                                    <div>
+                                        <Label className="text-sm font-medium">Username</Label>
+                                        <Input
+                                            type="text"
+                                            value={dhisUsername}
+                                            onChange={(e) => setDhisUsername(e.target.value)}
+                                            placeholder="Enter your DHIS2 username"
+                                            className="rounded-sm bg-[#F2F7FB] border-[#D9D9D9] outline-none border-t-0 border-x-0 border-b-2 focus:border-[#028700] shadow-none py-6"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-sm font-medium">Password</Label>
+                                        <Input
+                                            type="password"
+                                            value={dhisPassword}
+                                            onChange={(e) => setDhisPassword(e.target.value)}
+                                            placeholder="Enter your DHIS2 password"
+                                            className="rounded-sm bg-[#F2F7FB] border-[#D9D9D9] outline-none border-t-0 border-x-0 border-b-2 focus:border-[#028700] shadow-none py-6"
+                                        />
+                                    </div>
+                                    <div className="flex justify-end pt-4">
+                                        <Button
+                                            onClick={handleDHISConnect}
+                                            disabled={isConnecting}
+                                            className="bg-[#028700] hover:bg-[#026e00] text-white"
+                                        >
+                                            {isConnecting ? "Connecting..." : "Connect to DHIS2"}
+                                        </Button>
+                                    </div>
                                 </CardContent>
                             </Card>
                         </div>
