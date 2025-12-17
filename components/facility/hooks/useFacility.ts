@@ -9,11 +9,11 @@ import { BASE_URL } from "@/lib/axios";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || BASE_URL;
 
 // GET children facilities
-async function fetchFacilities(parentId: string): Promise<FacilityResponse> {
+async function fetchFacilities(parentId: string, page = 1, limit = 100): Promise<FacilityResponse> {
   const token = Cookies.get("authToken");
 
   const res = await fetch(
-    `${API_BASE}/facility/children/${parentId}?page=1&limit=100`,
+    `${API_BASE}/facility/children/${parentId}?page=${page}&limit=${limit}`,
     {
       method: "GET",
       headers: {
@@ -55,10 +55,26 @@ async function createFacility(payload: FacilityPayload) {
 // -------------------- HOOKS --------------------
 
 // GET hook
-export function useGetFacilities(parentId: string) {
+export function useGetFacilities(parentId: string, page = 1, limit = 100) {
   return useQuery<FacilityResponse>({
-    queryKey: ["facilities", parentId],
-    queryFn: () => fetchFacilities(parentId),
+    queryKey: ["facilities", parentId, page, limit],
+    queryFn: () => fetchFacilities(parentId, page, limit),
+  });
+}
+
+import { useInfiniteQuery } from "@tanstack/react-query";
+
+// Infinite GET hook for pagination
+export function useGetFacilitiesInfinite(parentId: string, limit = 20) {
+  return useInfiniteQuery({
+    queryKey: ["facilities-infinite", parentId],
+    queryFn: ({ pageParam = 1 }) => fetchFacilities(parentId, pageParam as number, limit),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const morePagesExist = lastPage.page * lastPage.limit < lastPage.count;
+      return morePagesExist ? lastPage.page + 1 : undefined;
+    },
+    enabled: !!parentId,
   });
 }
 
