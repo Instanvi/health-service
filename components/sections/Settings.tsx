@@ -72,10 +72,10 @@ export default function Settings() {
                 const data = await res.json();
                 setProfile(data.data || data);
             } catch (err) {
-                toast.error("Session expired");
+                // toast.error("Session expired");
                 console.error("Error: ", err)
-                Cookies.remove("authToken");
-                window.location.href = "/sign-in";
+                // Cookies.remove("authToken");
+                // window.location.href = "/sign-in";
             }
         };
         fetchProfile();

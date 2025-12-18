@@ -73,6 +73,8 @@ interface UseLiveTrackingOptions {
     type: TrackingType;
     enabled?: boolean;
     id?: string;
+    simulateData?: boolean;
+    simulationBasePoint?: [number, number];
 }
 
 interface UseLiveTrackingResult {
@@ -102,6 +104,8 @@ export function useLiveTracking({
     type,
     enabled = true,
     id,
+    simulateData,
+    simulationBasePoint,
 }: UseLiveTrackingOptions): UseLiveTrackingResult {
     const [locationUpdates, setLocationUpdates] = useState<LocationUpdate[]>([]);
     const [movementTrails, setMovementTrails] = useState<Map<string, MovementTrail>>(new Map());
@@ -293,6 +297,128 @@ export function useLiveTracking({
         clearTrails();
     }, [type, clearTrails]);
 
+    // SIMULATION LOGIC
+    useEffect(() => {
+        if (!simulateData || !simulationBasePoint) return;
+
+        console.log("[LiveTracking] Starting simulation...");
+
+        // Create a fake personality/team for simulation
+        const fakePersonality: PersonalityInfo = {
+            id: "sim-p-1",
+            first_name: "Simulated",
+            last_name: "User",
+            code: "SIM001"
+        };
+
+        const fakeTeam: TeamInfo = {
+            id: "sim-t-1",
+            name: "Simulated Team",
+            code: "SIM-TEAM",
+            team_lead_id: "sim-p-1",
+            members_count: 5
+        };
+
+        const fakeZone: ZoneInfo = {
+            id: "sim-z-1",
+            name: "Simulated Zone",
+            code: "Z001"
+        };
+
+        const fakeCampaign: CampaignInfo = {
+            id: "sim-c-1",
+            name: "Simulated Campaign",
+            status: "active"
+        };
+
+        const fakeFacility: FacilityInfo = {
+            id: "sim-f-1",
+            name: "Simulated Facility"
+        };
+
+        // Start from base point
+        let currentLat = simulationBasePoint[1];
+        let currentLng = simulationBasePoint[0];
+
+        // Random walk parameters
+        const stepSize = 0.0005; // approx 50m
+
+        const interval = setInterval(() => {
+            // Move slightly
+            currentLat += (Math.random() - 0.5) * stepSize;
+            currentLng += (Math.random() - 0.5) * stepSize;
+
+            const update: LocationUpdate = {
+                type: "location_update",
+                timestamp: new Date().toISOString(),
+                location: {
+                    type: "Point",
+                    coordinates: [currentLng, currentLat]
+                },
+                personality: fakePersonality,
+                team: fakeTeam,
+                campaign: fakeCampaign,
+                zone: fakeZone,
+                facility: fakeFacility
+            };
+
+            // Inject into state exactly like a real message
+            // We duplicate the logic from onmessage basically
+            setLocationUpdates((prev) => {
+                const updated = [...prev, update];
+                return updated.slice(-1000);
+            });
+
+            setMovementTrails((prev) => {
+                const newTrails = new Map(prev);
+
+                // Use the IDs from the update (or hardcoded for sim consistency)
+                // If we want it to match the filtered view, we might need to match the IDs passed in props
+                // But for now we use generic SIM IDs. 
+                // Note: The UI filters might hide this if IDs don't match selected zone/team.
+                // WE MUST USE IDs THAT MATCH THE FILTER if filtering is active.
+                // However, since this is a low-level hook, we don't know the filter IDs easily unless passed.
+                // For the "fallback" request, we'll try to use the IDs from the update.
+
+                // To display it, the user must select "Simulated Zone" or "Simulated Team" 
+                // OR we must spoof the IDs to match the real ones if id prop is provided.
+
+                // Let's rely on the user seeing all data or the filter logic in useSmartLiveTracking handling it.
+                // Wait, useSmartLiveTracking filters by ID. If we generate random IDs, they will be filtered out!
+                // We will handle this by using the 'id' prop passed to useLiveTracking if available, or generic ones.
+
+                const trailKey = `${update.zone.id}_${update.team.id}`;
+
+                const existingTrail = newTrails.get(trailKey);
+                const newPoint = {
+                    lat: update.location.coordinates[1],
+                    lng: update.location.coordinates[0],
+                    timestamp: update.timestamp,
+                    personality: update.personality,
+                };
+
+                if (existingTrail) {
+                    existingTrail.points.push(newPoint);
+                    if (existingTrail.points.length > 500) {
+                        existingTrail.points = existingTrail.points.slice(-500);
+                    }
+                } else {
+                    newTrails.set(trailKey, {
+                        entityId: trailKey,
+                        entityName: `${update.zone.name} - ${update.team.name}`,
+                        zoneId: update.zone.id,
+                        teamId: update.team.id,
+                        points: [newPoint],
+                    });
+                }
+                return newTrails;
+            });
+
+        }, 1000); // 1 update per second
+
+        return () => clearInterval(interval);
+    }, [simulateData, simulationBasePoint, id]); // Re-run if these change
+
     return {
         locationUpdates,
         movementTrails,
@@ -310,6 +436,7 @@ interface SmartTrackingOptions {
     filterZoneId?: string;
     filterTeamId?: string;
     enabled?: boolean;
+    simulateWithZone?: any; // The zone object (FacilityZone | Zone) to use for simulation base
 }
 
 export function useSmartLiveTracking({
@@ -317,6 +444,7 @@ export function useSmartLiveTracking({
     filterZoneId,
     filterTeamId,
     enabled = true,
+    simulateWithZone,
 }: SmartTrackingOptions) {
     // Determine which WebSocket endpoint to connect to based on the most specific filter
     // Priority: team > zone > campaign > facility (default on page load)
@@ -335,6 +463,13 @@ export function useSmartLiveTracking({
         return undefined;
     }, [filterTeamId, filterZoneId, filterCampaignId]);
 
+    // Calculate simulation base point if zone is provided
+    const simulationBasePoint: [number, number] | undefined = useMemo(() => {
+        if (!simulateWithZone?.boundaries?.coordinates?.[0]?.[0]) return undefined;
+        // Return the first point of the polygon [lng, lat]
+        return simulateWithZone.boundaries.coordinates[0][0];
+    }, [simulateWithZone]);
+
     const {
         locationUpdates,
         movementTrails,
@@ -342,7 +477,13 @@ export function useSmartLiveTracking({
         error,
         reconnect,
         clearTrails,
-    } = useLiveTracking({ type: trackingType, enabled, id: trackingId });
+    } = useLiveTracking({
+        type: trackingType,
+        enabled,
+        id: trackingId,
+        simulateData: !!simulateWithZone, // Enable simulation if zone is provided
+        simulationBasePoint
+    });
 
     // CLIENT-SIDE FILTERING: Filter movement trails to match selected zone/team
     // This matches trails to zones displayed on the map
@@ -350,6 +491,12 @@ export function useSmartLiveTracking({
         const filtered = new Map<string, MovementTrail>();
 
         movementTrails.forEach((trail, key) => {
+            // IF SIMULATING: Show simulated trails regardless of filter if checking fallback
+            if (simulateWithZone && trail.zoneId === "sim-z-1") {
+                filtered.set(key, trail);
+                return;
+            }
+
             // Apply filters - only show trails that match selected filters
             // If a zone is selected, only show trails for that zone
             if (filterZoneId && trail.zoneId !== filterZoneId) return;
@@ -360,17 +507,20 @@ export function useSmartLiveTracking({
         });
 
         return filtered;
-    }, [movementTrails, filterZoneId, filterTeamId]);
+    }, [movementTrails, filterZoneId, filterTeamId, simulateWithZone]);
 
     // Filter location updates by campaign/zone/team
     const filteredUpdates = useMemo(() => {
         return locationUpdates.filter((update) => {
+            // Hack for simulation visibility: if we are simulating, and the update looks simulated, show it.
+            if (simulateWithZone && update.zone.id === "sim-z-1") return true;
+
             if (filterZoneId && update.zone.id !== filterZoneId) return false;
             if (filterTeamId && update.team.id !== filterTeamId) return false;
             if (filterCampaignId && update.campaign.id !== filterCampaignId) return false;
             return true;
         });
-    }, [locationUpdates, filterZoneId, filterTeamId, filterCampaignId]);
+    }, [locationUpdates, filterZoneId, filterTeamId, filterCampaignId, simulateWithZone]);
 
     return {
         locationUpdates: filteredUpdates,
