@@ -113,6 +113,8 @@ export function useLiveTracking({
     const reconnectAttemptsRef = useRef(0);
     const maxReconnectAttempts = 5;
 
+    const connectionStartRef = useRef<number>(0);
+
     const connect = useCallback(() => {
         // Don't connect if disabled
         if (!enabled) {
@@ -150,12 +152,16 @@ export function useLiveTracking({
                 console.log(`[LiveTracking] ✓ Connected to ${type} tracking`);
                 setIsConnected(true);
                 setError(null);
-                reconnectAttemptsRef.current = 0;
+                connectionStartRef.current = Date.now();
+                // We don't reset attempts here anymore, we wait to see if it's stable
             };
 
             ws.onmessage = (event) => {
                 try {
                     const data: LocationUpdate = JSON.parse(event.data);
+
+                    // Log the received data for debugging
+                    console.log(`[LiveTracking] Received data from ${type}:`, data);
 
                     if (data.type === "location_update") {
                         // Add to location updates array
@@ -217,6 +223,15 @@ export function useLiveTracking({
                 console.log(`[LiveTracking] Connection closed: ${reason}`);
                 setIsConnected(false);
 
+                // Calculate connection duration
+                const duration = Date.now() - connectionStartRef.current;
+                const wasStable = duration > 5000; // 5 seconds stability threshold
+
+                if (wasStable) {
+                    // If it was stable for > 5s, reset attempts so we can try fully again
+                    reconnectAttemptsRef.current = 0;
+                }
+
                 // Attempt to reconnect with exponential backoff
                 if (reconnectAttemptsRef.current < maxReconnectAttempts && enabled) {
                     const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
@@ -239,6 +254,7 @@ export function useLiveTracking({
 
     const reconnect = useCallback(() => {
         reconnectAttemptsRef.current = 0;
+        connectionStartRef.current = 0; // Reset start time
         setError(null);
         connect();
     }, [connect]);
