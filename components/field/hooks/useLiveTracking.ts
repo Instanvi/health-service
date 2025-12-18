@@ -72,6 +72,7 @@ export type TrackingType = "facility" | "campaign" | "zone" | "team";
 interface UseLiveTrackingOptions {
     type: TrackingType;
     enabled?: boolean;
+    id?: string;
 }
 
 interface UseLiveTrackingResult {
@@ -87,7 +88,6 @@ interface UseLiveTrackingResult {
 const WS_BASE = (process.env.NEXT_PUBLIC_API_URL || "https://api.dappahealth.eu/dappa")
     .replace("https://", "wss://")
     .replace("http://", "ws://")
-    .replace("/dappa", ""); // Remove the /dappa suffix for WebSocket
 
 const ENDPOINTS: Record<TrackingType, string> = {
     facility: "/track/live/facility",
@@ -101,6 +101,7 @@ const ENDPOINTS: Record<TrackingType, string> = {
 export function useLiveTracking({
     type,
     enabled = true,
+    id,
 }: UseLiveTrackingOptions): UseLiveTrackingResult {
     const [locationUpdates, setLocationUpdates] = useState<LocationUpdate[]>([]);
     const [movementTrails, setMovementTrails] = useState<Map<string, MovementTrail>>(new Map());
@@ -131,10 +132,15 @@ export function useLiveTracking({
             return;
         }
 
-        // Only pass the token, NO ID parameters
-        const wsUrl = `${WS_BASE}${ENDPOINTS[type]}?token=${token}`;
+        // Construct URL: endpoint/id?token=...
+        // For facility, id is usually undefined so it stays endpoint?token=...
+        let wsUrl = `${WS_BASE}${ENDPOINTS[type]}`;
+        if (id) {
+            wsUrl += `/${id}`;
+        }
+        wsUrl += `?token=${token}`;
 
-        console.log(`[LiveTracking] Connecting to ${type} tracking...`);
+        console.log(`[LiveTracking] Connecting to ${type} tracking... URL: ${wsUrl}`);
 
         try {
             const ws = new WebSocket(wsUrl);
@@ -229,7 +235,7 @@ export function useLiveTracking({
             console.error("[LiveTracking] Failed to create WebSocket:", e);
             setError("Failed to establish connection");
         }
-    }, [type, enabled]);
+    }, [type, enabled, id]);
 
     const reconnect = useCallback(() => {
         reconnectAttemptsRef.current = 0;
@@ -297,6 +303,14 @@ export function useSmartLiveTracking({
         return "facility"; // Default: connect to facility endpoint on page load
     }, [filterTeamId, filterZoneId, filterCampaignId]);
 
+    // Determine the ID to pass to the WebSocket connection
+    const trackingId = useMemo(() => {
+        if (filterTeamId) return filterTeamId;
+        if (filterZoneId) return filterZoneId;
+        if (filterCampaignId) return filterCampaignId;
+        return undefined;
+    }, [filterTeamId, filterZoneId, filterCampaignId]);
+
     const {
         locationUpdates,
         movementTrails,
@@ -304,7 +318,7 @@ export function useSmartLiveTracking({
         error,
         reconnect,
         clearTrails,
-    } = useLiveTracking({ type: trackingType, enabled });
+    } = useLiveTracking({ type: trackingType, enabled, id: trackingId });
 
     // CLIENT-SIDE FILTERING: Filter movement trails to match selected zone/team
     // This matches trails to zones displayed on the map
