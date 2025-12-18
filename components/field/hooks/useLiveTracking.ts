@@ -126,6 +126,9 @@ export function useLiveTracking({
             wsRef.current.close();
         }
 
+        // Reset connection start time
+        connectionStartRef.current = 0;
+
         const token = Cookies.get("authToken");
 
         if (!token) {
@@ -224,7 +227,8 @@ export function useLiveTracking({
                 setIsConnected(false);
 
                 // Calculate connection duration
-                const duration = Date.now() - connectionStartRef.current;
+                // Only calculate if we actually connected (start time > 0)
+                const duration = connectionStartRef.current > 0 ? Date.now() - connectionStartRef.current : 0;
                 const wasStable = duration > 5000; // 5 seconds stability threshold
 
                 if (wasStable) {
