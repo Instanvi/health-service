@@ -61,7 +61,7 @@ export default function Settings() {
             if (!token) return toast.error("Please log in");
 
             try {
-                const res = await fetch('http://173.249.30.54/dappa/personality/', {
+                const res = await fetch('https://api.dappahealth.eu/dappa/personality/', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -73,7 +73,7 @@ export default function Settings() {
                 setProfile(data.data || data);
             } catch (err) {
                 // toast.error("Session expired");
-                console.error("Error: ", err)
+                console.error("ErrorProfile: ", err)
                 // Cookies.remove("authToken");
                 // window.location.href = "/sign-in";
             }
