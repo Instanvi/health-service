@@ -123,6 +123,8 @@ export function useLiveTracking({
 
         // Close existing connection
         if (wsRef.current) {
+            // Prevent reconnection attempts when intentionally closing
+            wsRef.current.onclose = null;
             wsRef.current.close();
         }
 
@@ -279,6 +281,8 @@ export function useLiveTracking({
                 clearTimeout(reconnectTimeoutRef.current);
             }
             if (wsRef.current) {
+                // Prevent reconnection attempts when unmounting/cleaning up
+                wsRef.current.onclose = null;
                 wsRef.current.close();
             }
         };
