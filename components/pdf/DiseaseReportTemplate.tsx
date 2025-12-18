@@ -8,14 +8,14 @@ interface DiseaseRow {
     suspected: {
         '0-14': { m: string; f: string };
         '15-24': { m: string; f: string };
-        '25-49': { m: string; f: string };
-        '60+': { m: string; f: string };
+        '25-64': { m: string; f: string };
+        '65+': { m: string; f: string };
     };
     deaths: {
         '0-14': { m: string; f: string };
         '15-24': { m: string; f: string };
-        '25-49': { m: string; f: string };
-        '60+': { m: string; f: string };
+        '25-64': { m: string; f: string };
+        '65+': { m: string; f: string };
     };
     samples: string;
     confirmed: string;
@@ -146,12 +146,12 @@ export const DiseaseReportTemplate = React.forwardRef<HTMLDivElement, DiseaseRep
                             <tr>
                                 <th colSpan={2} style={styles.thAge}>0-14</th>
                                 <th colSpan={2} style={styles.thAge}>15-24</th>
-                                <th colSpan={2} style={styles.thAge}>25-49</th>
-                                <th colSpan={2} style={styles.thAge}>60+</th>
+                                <th colSpan={2} style={styles.thAge}>25-64</th>
+                                <th colSpan={2} style={styles.thAge}>65+</th>
                                 <th colSpan={2} style={styles.thAge}>0-14</th>
                                 <th colSpan={2} style={styles.thAge}>15-24</th>
-                                <th colSpan={2} style={styles.thAge}>25-49</th>
-                                <th colSpan={2} style={styles.thAge}>60+</th>
+                                <th colSpan={2} style={styles.thAge}>25-64</th>
+                                <th colSpan={2} style={styles.thAge}>65+</th>
                             </tr>
 
                             {/* Header Row 3 - Gender */}
@@ -177,19 +177,19 @@ export const DiseaseReportTemplate = React.forwardRef<HTMLDivElement, DiseaseRep
                                     <td style={styles.td}>{row.suspected['0-14'].f}</td>
                                     <td style={styles.td}>{row.suspected['15-24'].m}</td>
                                     <td style={styles.td}>{row.suspected['15-24'].f}</td>
-                                    <td style={styles.td}>{row.suspected['25-49'].m}</td>
-                                    <td style={styles.td}>{row.suspected['25-49'].f}</td>
-                                    <td style={styles.td}>{row.suspected['60+'].m}</td>
-                                    <td style={styles.td}>{row.suspected['60+'].f}</td>
+                                    <td style={styles.td}>{row.suspected['25-64'].m}</td>
+                                    <td style={styles.td}>{row.suspected['25-64'].f}</td>
+                                    <td style={styles.td}>{row.suspected['65+'].m}</td>
+                                    <td style={styles.td}>{row.suspected['65+'].f}</td>
                                     {/* Deaths */}
                                     <td style={styles.td}>{row.deaths['0-14'].m}</td>
                                     <td style={styles.td}>{row.deaths['0-14'].f}</td>
                                     <td style={styles.td}>{row.deaths['15-24'].m}</td>
                                     <td style={styles.td}>{row.deaths['15-24'].f}</td>
-                                    <td style={styles.td}>{row.deaths['25-49'].m}</td>
-                                    <td style={styles.td}>{row.deaths['25-49'].f}</td>
-                                    <td style={styles.td}>{row.deaths['60+'].m}</td>
-                                    <td style={styles.td}>{row.deaths['60+'].f}</td>
+                                    <td style={styles.td}>{row.deaths['25-64'].m}</td>
+                                    <td style={styles.td}>{row.deaths['25-64'].f}</td>
+                                    <td style={styles.td}>{row.deaths['65+'].m}</td>
+                                    <td style={styles.td}>{row.deaths['65+'].f}</td>
                                     {/* Sample and Confirmed */}
                                     <td style={styles.td}>{row.samples}</td>
                                     <td style={styles.td}>{row.confirmed}</td>

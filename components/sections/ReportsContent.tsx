@@ -13,7 +13,10 @@ import DiseaseReportTemplate from '@/components/pdf/DiseaseReportTemplate';
 import { SelectionSheet } from "@/components/ui/selection-sheet";
 import { useGetFacilitiesInfinite } from "@/components/facility/hooks/useFacility";
 import { useSendWeeklyReport } from "@/hooks/useDHIS2";
-import { Upload } from "lucide-react";
+import { Upload, CalendarIcon } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 // --- MOCK DATA & CONFIGURATION ---
 
@@ -37,8 +40,8 @@ interface TimeUnit {
 type AgeGroupData = {
   '0-14': { m: string; f: string };
   '15-24': { m: string; f: string };
-  '25-49': { m: string; f: string };
-  '60+': { m: string; f: string };
+  '25-64': { m: string; f: string };
+  '65+': { m: string; f: string };
 };
 
 interface DiseaseRow {
@@ -79,7 +82,7 @@ const NOTIFIABLE_DISEASES = [
 
 // 🚀 Main Application Component
 export default function ReportsContent() {
-  const baseDate = new Date('2023-06-01');
+  const [baseDate, setBaseDate] = useState<Date>(new Date('2023-06-01'));
 
 
   // DHIS2 Integration
@@ -128,7 +131,7 @@ export default function ReportsContent() {
             date: day,
             label: format(day, 'EEE').charAt(0),
             value: format(day, 'd'),
-            isToday: isSameDay(day, baseDate),
+            isToday: isSameDay(day, new Date()),
           });
         }
         break;
@@ -141,7 +144,7 @@ export default function ReportsContent() {
             date: weekStart,
             label: `W${format(weekStart, 'w')}`,
             value: format(weekStart, 'w'),
-            isToday: isSameWeek(weekStart, baseDate, { weekStartsOn: 1 }),
+            isToday: isSameWeek(weekStart, new Date(), { weekStartsOn: 1 }),
           });
         }
         break;
@@ -154,7 +157,7 @@ export default function ReportsContent() {
             date: month,
             label: format(month, 'MMM'),
             value: format(month, 'M'),
-            isToday: isSameMonth(month, baseDate),
+            isToday: isSameMonth(month, new Date()),
           });
         }
         break;
@@ -167,7 +170,7 @@ export default function ReportsContent() {
             date: year,
             label: '',
             value: format(year, 'yyyy'),
-            isToday: isSameYear(year, baseDate),
+            isToday: isSameYear(year, new Date()),
           });
         }
         break;
@@ -175,7 +178,7 @@ export default function ReportsContent() {
         break;
     }
     return generatedUnits;
-  }, [activeView]);
+  }, [activeView, baseDate]);
 
   // Reset selected unit when view changes
   useEffect(() => {
@@ -247,8 +250,14 @@ export default function ReportsContent() {
 
     return apiDiseaseData.map((item: ApiDiseaseItem, index: number) => {
       const getVal = (obj: any, key: string, field: 'm' | 'f') => {
+        // console.log(`Getting ${key}.${field}:`, obj?.[key]?.[field]);
         return obj?.[key]?.[field]?.toString() || '0';
       };
+
+      if (item.disease.includes('Cholera')) {
+        console.log('Cholera Item:', item);
+        console.log('Suspected 25_64:', item.suspected_cases?.['25_64']);
+      }
 
       return {
         id: index + 1,
@@ -257,14 +266,14 @@ export default function ReportsContent() {
         suspected: {
           '0-14': { m: getVal(item.suspected_cases, '0_14', 'm'), f: getVal(item.suspected_cases, '0_14', 'f') },
           '15-24': { m: getVal(item.suspected_cases, '15_24', 'm'), f: getVal(item.suspected_cases, '15_24', 'f') },
-          '25-49': { m: getVal(item.suspected_cases, '25_46', 'm'), f: getVal(item.suspected_cases, '25_46', 'f') },
-          '60+': { m: getVal(item.suspected_cases, '47_plus', 'm'), f: getVal(item.suspected_cases, '47_plus', 'f') },
+          '25-64': { m: getVal(item.suspected_cases, '25_64', 'm'), f: getVal(item.suspected_cases, '25_64', 'f') },
+          '65+': { m: getVal(item.suspected_cases, '65_plus', 'm'), f: getVal(item.suspected_cases, '65_plus', 'f') },
         },
         deaths: {
           '0-14': { m: getVal(item.deaths, '0_14', 'm'), f: getVal(item.deaths, '0_14', 'f') },
           '15-24': { m: getVal(item.deaths, '15_24', 'm'), f: getVal(item.deaths, '15_24', 'f') },
-          '25-49': { m: getVal(item.deaths, '25_46', 'm'), f: getVal(item.deaths, '25_46', 'f') },
-          '60+': { m: getVal(item.deaths, '47_plus', 'm'), f: getVal(item.deaths, '47_plus', 'f') },
+          '25-64': { m: getVal(item.deaths, '25_64', 'm'), f: getVal(item.deaths, '25_64', 'f') },
+          '65+': { m: getVal(item.deaths, '65_plus', 'm'), f: getVal(item.deaths, '65_plus', 'f') },
         },
         samples: item.sample_cases?.toString() || '0',
         confirmed: item.confirmed_cases?.toString() || '0',
@@ -275,6 +284,10 @@ export default function ReportsContent() {
   const filteredReports = useMemo(() => reports, [reports]);
 
   const handleUnitClick = (unitId: string) => {
+    const unit = units.find((u) => u.id === unitId);
+    if (unit) {
+      setBaseDate(unit.date);
+    }
     setSelectedUnitId(unitId);
   };
 
@@ -292,18 +305,18 @@ export default function ReportsContent() {
       'Suspected_0-14_F': row.suspected['0-14'].f,
       'Suspected_15-24_M': row.suspected['15-24'].m,
       'Suspected_15-24_F': row.suspected['15-24'].f,
-      'Suspected_25-49_M': row.suspected['25-49'].m,
-      'Suspected_25-49_F': row.suspected['25-49'].f,
-      'Suspected_60+_M': row.suspected['60+'].m,
-      'Suspected_60+_F': row.suspected['60+'].f,
+      'Suspected_25-64_M': row.suspected['25-64'].m,
+      'Suspected_25-64_F': row.suspected['25-64'].f,
+      'Suspected_65+_M': row.suspected['65+'].m,
+      'Suspected_65+_F': row.suspected['65+'].f,
       'Deaths_0-14_M': row.deaths['0-14'].m,
       'Deaths_0-14_F': row.deaths['0-14'].f,
       'Deaths_15-24_M': row.deaths['15-24'].m,
       'Deaths_15-24_F': row.deaths['15-24'].f,
-      'Deaths_25-49_M': row.deaths['25-49'].m,
-      'Deaths_25-49_F': row.deaths['25-49'].f,
-      'Deaths_60+_M': row.deaths['60+'].m,
-      'Deaths_60+_F': row.deaths['60+'].f,
+      'Deaths_25-64_M': row.deaths['25-64'].m,
+      'Deaths_25-64_F': row.deaths['25-64'].f,
+      'Deaths_65+_M': row.deaths['65+'].m,
+      'Deaths_65+_F': row.deaths['65+'].f,
       Sample_Cases: row.samples,
       Confirmed: row.confirmed,
     }));
@@ -319,7 +332,7 @@ export default function ReportsContent() {
 
   const handleExportCSV = () => {
     const filename = `Disease_Report_${activeView}_${format(new Date(), 'yyyy-MM-dd')}`;
-    const headers = ['No', 'Disease', 'Suspected_0-14_M', 'Suspected_0-14_F', 'Suspected_15-24_M', 'Suspected_15-24_F', 'Suspected_25-49_M', 'Suspected_25-49_F', 'Suspected_60+_M', 'Suspected_60+_F', 'Deaths_0-14_M', 'Deaths_0-14_F', 'Deaths_15-24_M', 'Deaths_15-24_F', 'Deaths_25-49_M', 'Deaths_25-49_F', 'Deaths_60+_M', 'Deaths_60+_F', 'Sample_Cases', 'Confirmed'];
+    const headers = ['No', 'Disease', 'Suspected_0-14_M', 'Suspected_0-14_F', 'Suspected_15-24_M', 'Suspected_15-24_F', 'Suspected_25-64_M', 'Suspected_25-64_F', 'Suspected_65+_M', 'Suspected_65+_F', 'Deaths_0-14_M', 'Deaths_0-14_F', 'Deaths_15-24_M', 'Deaths_15-24_F', 'Deaths_25-64_M', 'Deaths_25-64_F', 'Deaths_65+_M', 'Deaths_65+_F', 'Sample_Cases', 'Confirmed'];
     const rows = filteredReports.map(row => [
       row.id.toString().padStart(2, '0'),
       row.name,
@@ -327,18 +340,18 @@ export default function ReportsContent() {
       row.suspected['0-14'].f,
       row.suspected['15-24'].m,
       row.suspected['15-24'].f,
-      row.suspected['25-49'].m,
-      row.suspected['25-49'].f,
-      row.suspected['60+'].m,
-      row.suspected['60+'].f,
+      row.suspected['25-64'].m,
+      row.suspected['25-64'].f,
+      row.suspected['65+'].m,
+      row.suspected['65+'].f,
       row.deaths['0-14'].m,
       row.deaths['0-14'].f,
       row.deaths['15-24'].m,
       row.deaths['15-24'].f,
-      row.deaths['25-49'].m,
-      row.deaths['25-49'].f,
-      row.deaths['60+'].m,
-      row.deaths['60+'].f,
+      row.deaths['25-64'].m,
+      row.deaths['25-64'].f,
+      row.deaths['65+'].m,
+      row.deaths['65+'].f,
       row.samples,
       row.confirmed,
     ]);
@@ -526,18 +539,43 @@ export default function ReportsContent() {
         {/* Time Selector and Units Display */}
         <div className="p-4 px-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 border-b border-t pt-1 pb-1 px-4">
-            <div className="flex p-2 space-x-1 mb-4 md:mb-0 bg-gray-100 rounded-md px-1 text-gray-[800]">
-              {Object.values(View).reverse().map((view) => (
-                <Button
-                  key={view}
-                  variant={activeView === view ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => handleViewChange(view)}
-                  className={`rounded-md px-4 py-5 ${activeView === view && 'bg-[#028700] hover:bg-[#028700d8]'}`}
-                >
-                  {view}
-                </Button>
-              ))}
+            <div className="flex gap-4 items-center mb-4 md:mb-0">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-[240px] justify-start text-left font-normal border-gray-300",
+                      !baseDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {baseDate ? format(baseDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={baseDate}
+                    onSelect={(d) => d && setBaseDate(d)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <div className="flex p-2 space-x-1 bg-gray-100 rounded-md px-1 text-gray-[800]">
+                {Object.values(View).reverse().map((view) => (
+                  <Button
+                    key={view}
+                    variant={activeView === view ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => handleViewChange(view)}
+                    className={`rounded-md px-4 py-5 ${activeView === view && 'bg-[#028700] hover:bg-[#028700d8]'}`}
+                  >
+                    {view}
+                  </Button>
+                ))}
+              </div>
             </div>
 
             <div className="flex space-x-3 pb-2">
@@ -576,14 +614,14 @@ export default function ReportsContent() {
                     <th rowSpan={3}>Confirmed</th>
                   </tr>
                   <tr>
-                    <th colSpan={2} className="subheader">0 - 14 ans</th>
-                    <th colSpan={2} className="subheader">15 - 24 ans</th>
-                    <th colSpan={2} className="subheader">25 - 49 ans</th>
-                    <th colSpan={2} className="subheader">60 Et plus</th>
-                    <th colSpan={2} className="subheader">0 - 14 ans</th>
-                    <th colSpan={2} className="subheader">15 - 24 ans</th>
-                    <th colSpan={2} className="subheader">25 - 49 ans</th>
-                    <th colSpan={2} className="subheader">60 Et plus</th>
+                    <th colSpan={2} className="subheader">0 - 14</th>
+                    <th colSpan={2} className="subheader">15 - 24</th>
+                    <th colSpan={2} className="subheader">25 - 64</th>
+                    <th colSpan={2} className="subheader">65+</th>
+                    <th colSpan={2} className="subheader">0 - 14</th>
+                    <th colSpan={2} className="subheader">15 - 24</th>
+                    <th colSpan={2} className="subheader">25 - 64</th>
+                    <th colSpan={2} className="subheader">65+</th>
                   </tr>
                   <tr>
                     <th className="age-header">M</th><th className="age-header">F</th>
@@ -605,18 +643,18 @@ export default function ReportsContent() {
                       <td><Input type="text" value={row.suspected['0-14'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
                       <td><Input type="text" value={row.suspected['15-24'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
                       <td><Input type="text" value={row.suspected['15-24'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
-                      <td><Input type="text" value={row.suspected['25-49'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
-                      <td><Input type="text" value={row.suspected['25-49'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
-                      <td><Input type="text" value={row.suspected['60+'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
-                      <td><Input type="text" value={row.suspected['60+'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
+                      <td><Input type="text" value={row.suspected['25-64'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
+                      <td><Input type="text" value={row.suspected['25-64'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
+                      <td><Input type="text" value={row.suspected['65+'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
+                      <td><Input type="text" value={row.suspected['65+'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
                       <td><Input type="text" value={row.deaths['0-14'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
                       <td><Input type="text" value={row.deaths['0-14'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
                       <td><Input type="text" value={row.deaths['15-24'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
                       <td><Input type="text" value={row.deaths['15-24'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
-                      <td><Input type="text" value={row.deaths['25-49'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
-                      <td><Input type="text" value={row.deaths['25-49'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
-                      <td><Input type="text" value={row.deaths['60+'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
-                      <td><Input type="text" value={row.deaths['60+'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
+                      <td><Input type="text" value={row.deaths['25-64'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
+                      <td><Input type="text" value={row.deaths['25-64'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
+                      <td><Input type="text" value={row.deaths['65+'].m} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
+                      <td><Input type="text" value={row.deaths['65+'].f} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
                       <td><Input type="text" value={row.samples} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
                       <td><Input type="text" value={row.confirmed} readOnly className="border-none rounded-none shadow-none bg-inherit" /></td>
                     </tr>

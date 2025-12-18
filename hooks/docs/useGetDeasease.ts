@@ -26,8 +26,8 @@ export interface GenderStats {
 export interface AgeGroupStats {
     "0_14": GenderStats;
     "15_24": GenderStats;
-    "25_46": GenderStats;
-    "47_plus": GenderStats;
+    "25_64": GenderStats;
+    "65_plus": GenderStats;
 }
 
 // 3. The main object for a single disease entry
