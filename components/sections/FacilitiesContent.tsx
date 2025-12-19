@@ -171,12 +171,38 @@ export default function FacilitiesContent() {
     const userDataString = typeof window !== 'undefined' ? localStorage.getItem('userData') : null;
     const personel = userDataString ? JSON.parse(userDataString) : null;
     const currentUserFacilityId = personel?.facility?.id;
+    const currentUserFacilityType = personel?.facility_type; // Get facility_type from user data
     const currentUserName = personel?.name || "Dr. Admin User"; // Fallback name
 
     const [selectedStatus, setSelectedStatus] = useState<"complete" | "incomplete" | "missing" | null>(null);
-    const [selectedParentId] = useState<string>(currentUserFacilityId || "");
+
+    // For district users: track selected health area
+    const [selectedHealthAreaId, setSelectedHealthAreaId] = useState<string>("");
+    const [healthAreaDropdownOpen, setHealthAreaDropdownOpen] = useState(false);
+
+    // Determine the parent ID to use for fetching facilities
+    // If district user has selected a health area, use that; otherwise use their facility ID
+    const isDistrictUser = currentUserFacilityType === "district";
+    const selectedParentId = isDistrictUser && selectedHealthAreaId
+        ? selectedHealthAreaId
+        : currentUserFacilityId || "";
+
+    // Fetch health areas for district users (using their facility as parent)
+    const { data: healthAreasData, isLoading: isLoadingHealthAreas } = useGetFacilities(
+        isDistrictUser ? currentUserFacilityId || "" : "",
+        1,
+        100
+    );
+    const healthAreas = healthAreasData?.results || [];
+
+    // Fetch facilities based on selected parent (either health area or user's facility)
     const { data, isLoading: isFetching, error } = useGetFacilities(selectedParentId);
     const facilities = data?.results || [];
+
+    // Get selected health area name for display
+    const selectedHealthAreaName = healthAreas.find(
+        (ha: Facility) => ha._id === selectedHealthAreaId
+    )?.name || "Select Health Area";
 
     // Supervision State
     const [supervisionState, setSupervisionState] = useState<Record<string, string>>({});
@@ -369,9 +395,109 @@ export default function FacilitiesContent() {
 
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-                <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1 text-sm bg-purple-100 text-purple-700">
-                    Health Facilities Overview
-                </Badge>
+                <div className="flex items-center" style={{ gap: '20px' }}>
+                    <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1 text-sm bg-purple-100 text-purple-700">
+                        Health Facilities Overview
+                    </Badge>
+
+                    {/* Health Area Dropdown - Only visible for District users */}
+                    {isDistrictUser && (
+                        <>
+                            <Popover open={healthAreaDropdownOpen} onOpenChange={setHealthAreaDropdownOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={healthAreaDropdownOpen}
+                                        className="w-[220px] justify-between border-gray-300 h-9"
+                                        disabled={isLoadingHealthAreas}
+                                    >
+                                        <span className="truncate">
+                                            {isLoadingHealthAreas ? "Loading..." : selectedHealthAreaName}
+                                        </span>
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            width="16"
+                                            height="16"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            className="ml-2 h-4 w-4 shrink-0 opacity-50"
+                                        >
+                                            <path d="m6 9 6 6 6-6" />
+                                        </svg>
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[220px] p-0" align="start">
+                                    <div className="max-h-[300px] overflow-y-auto">
+                                        {/* Option to show all (use district as parent) */}
+                                        <button
+                                            className={cn(
+                                                "w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2",
+                                                !selectedHealthAreaId && "bg-purple-50 text-purple-700 font-medium"
+                                            )}
+                                            onClick={() => {
+                                                setSelectedHealthAreaId("");
+                                                setHealthAreaDropdownOpen(false);
+                                            }}
+                                        >
+                                            {!selectedHealthAreaId && (
+                                                <Check className="h-4 w-4 text-purple-700" />
+                                            )}
+                                            <span className={!selectedHealthAreaId ? "" : "ml-6"}>All Health Areas</span>
+                                        </button>
+
+                                        <div className="border-t border-gray-200 my-1" />
+
+                                        {/* List of health areas */}
+                                        {healthAreas.map((healthArea: Facility) => (
+                                            <button
+                                                key={healthArea._id}
+                                                className={cn(
+                                                    "w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2",
+                                                    selectedHealthAreaId === healthArea._id && "bg-purple-50 text-purple-700 font-medium"
+                                                )}
+                                                onClick={() => {
+                                                    setSelectedHealthAreaId(healthArea._id);
+                                                    setHealthAreaDropdownOpen(false);
+                                                }}
+                                            >
+                                                {selectedHealthAreaId === healthArea._id && (
+                                                    <Check className="h-4 w-4 text-purple-700" />
+                                                )}
+                                                <span className={selectedHealthAreaId === healthArea._id ? "" : "ml-6"}>
+                                                    {healthArea.name}
+                                                </span>
+                                            </button>
+                                        ))}
+
+                                        {healthAreas.length === 0 && !isLoadingHealthAreas && (
+                                            <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                                                No health areas found
+                                            </div>
+                                        )}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+
+                            {/* Clear filter button - shows when a health area is selected */}
+                            {selectedHealthAreaId && (
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => setSelectedHealthAreaId("")}
+                                    className="h-9 w-9 shrink-0 border-gray-300 hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors"
+                                    title="Clear filter and show all health areas"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            )}
+                        </>
+                    )}
+                </div>
 
                 {/* Status Filter Bar */}
                 <div className="flex items-center mt-4 md:mt-0 p-2 border rounded-md bg-gray-100 h-12">
