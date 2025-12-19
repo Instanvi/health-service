@@ -65,7 +65,7 @@ async function fetchFacilityPersonalities(facilityId: string): Promise<any> {
   if (!token) throw new Error("Authentication token missing");
 
   const res = await fetch(
-    `${API_BASE}/${facilityId}/personalities?page=1&limit=100`,
+    `${API_BASE}/facility/${facilityId}/personalities?page=1&limit=100`,
     {
       method: "GET",
       headers: {
