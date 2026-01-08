@@ -22,6 +22,7 @@ import {
     ShieldIcon,
     FileIcon,
     HospitalIcon,
+    PulseIcon,
 } from "@phosphor-icons/react";
 import Cookies from "js-cookie";
 import { toast } from 'sonner';
@@ -29,6 +30,7 @@ import Security from '../Security';
 import Team from '../team/Team';
 import Facility from '../facility/Facility';
 import { useConnectDHIS2 } from '@/hooks/useDHIS2';
+import DHIS2ReportContent from './DHIS2ReportContent';
 
 export default function Settings() {
     const [activeMenu, setActiveMenu] = useState('Notifications');
@@ -89,6 +91,7 @@ export default function Settings() {
         { id: 'Team', label: 'Team', icon: UsersIcon },
         { id: 'Security', label: 'Security', icon: ShieldIcon },
         { id: 'DHIS2', label: 'DHIS2', icon: HospitalIcon },
+        { id: 'DHIS2Report', label: 'DHIS2 Reports', icon: PulseIcon },
         { id: 'Terms', label: 'Terms of Service', icon: FileIcon },
     ];
 
@@ -241,6 +244,11 @@ export default function Settings() {
                             </Card>
                         </div>
                     )}
+                    {
+                        activeMenu === 'DHIS2Report' && (
+                            <DHIS2ReportContent />
+                        )
+                    }
                 </div>
             </main>
 
