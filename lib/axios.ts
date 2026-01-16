@@ -2,7 +2,7 @@
 import Cookies from "js-cookie";
 import { useMutation, UseMutationOptions } from "@tanstack/react-query";
 
-export const BASE_URL = 'https://api/dappahealth.eu/dappa'
+export const BASE_URL = 'https://api/dappahealth.online/dappa'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 // Reusable authenticated fetch with global 401 handling
